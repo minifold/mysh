@@ -30,7 +30,7 @@ typedef struct commands {
     char ** argv;
 }commands;
 
-user_t * initshell(user_t * user)
+user_t initshell(user_t user)
 {   
     clear();
     puts("================================\n"
@@ -43,16 +43,16 @@ user_t * initshell(user_t * user)
         "mind. It is not compatible with  \n"
         "MSDOS.                        \n\n");
 
-    user->username = getenv("USER");
-    user->host = malloc(sizeof(char) * MAXLETTERS);
+    user.username = getenv("USER");
+    user.host = malloc(sizeof(char) * MAXLETTERS);
     char pwd[MAXLETTERS];
-    user->dir = getcwd(pwd, sizeof(pwd));
+    user.dir = getcwd(pwd, sizeof(pwd));
 
-    gethostname(user->host, sizeof(user->host));
+    gethostname(user.host, sizeof(user.host));
     
-    printf("USER is: %s\n", user->username);
-    printf("HOST is: %s\n", user->host);
-    printf("Current Directory: %s\n", user->dir);
+    printf("USER is: %s\n", user.username);
+    printf("HOST is: %s\n", user.host);
+    printf("Current Directory: %s\n", user.dir);
 
     sleep(2);
     clear();
@@ -61,17 +61,17 @@ user_t * initshell(user_t * user)
 
 
 commands * addtohistory(char * buffer, char ** args, FILE * fp, 
-                        commands * history) {
-    int i = 0;
+                        commands * history, int i) {
+
     if(!fprintf(fp, "%s", buffer)) {
             fprintf(stderr, "mysh: error saving command to history.\n");
             return history;
     }
 
-    history->argc = sizeof(args) / sizeof(args[0]) - 1;
+    history[i].argc = sizeof(args) / sizeof(args[0]) - 1;
     // printf("%d\n", history->argc);   
-    history->argv = args;
-    history->command = buffer;
+    history[i].argv = args;
+    history[i].command = buffer;
 
     return history;
 }
@@ -155,14 +155,14 @@ char ** parser(char * input)
     return argv;
 }
 
-int launch(user_t * user, char ** args)
+int launch(user_t user, char ** args)
 {
     pid_t pid, wpid;
     int status;
     pid = fork();
     
     if (pid <= 0) {
-        if (execv(user->dir, args) < 0) {
+        if (execv(user.dir, args) < 0) {
             fprintf(stderr, "mysh: error executing program\n");
             return -1;
         }
@@ -179,39 +179,29 @@ int launch(user_t * user, char ** args)
     return 1;
 }
 
-int cwd(user_t * user) {
-    if (user->dir == NULL) {
+int cwd(user_t user) {
+    if (user.dir == NULL) {
         fprintf(stderr, "mysh: current directory not found\n");
         return 0;
     }
     
-    fprintf(stdout, "%s\n", user->dir);
+    fprintf(stdout, "%s\n", user.dir);
     return 1;
 }
 
-void prompt(user_t * user)
+void prompt(user_t user)
 {    
     char cwd[MAXLETTERS];
-
-    strcpy(cwd, user->dir);
+    strcpy(cwd, user.dir);
     // truncate directory for viewing ease
-    char* tmp = cwd;
-    char* dirprompt;
-    // get the first token
-    tmp = strtok(tmp, "/");
-    // find the last directory in the file tree
-    while(tmp)
-    {
-        dirprompt = tmp;
-        tmp = strtok(NULL, "/");
-    }
+    char * dirprompt = strrchr(user.dir, '/');
     // print the prompt
-    fprintf(stdout, GREEN "%s@%s: " RESET BLUE "%s " RESET "# ", user->username,
-                                                                 user->host, dirprompt);
+    fprintf(stdout, GREEN "%s@%s: " RESET BLUE "%s " RESET "# ", user.username,
+                                                                 user.host, dirprompt);
     return;
 }
 
-int cd(char ** args, user_t * user)
+int cd(char ** args, user_t user)
 {
     if (args[2] != NULL)
     {
@@ -227,23 +217,25 @@ int cd(char ** args, user_t * user)
 
     else
     {
-        char buffer[PATH_MAX];
-        DIR * dir = opendir(args[1]);
-        if (dir == NULL)
-        {
-            fprintf(stderr, "mysh: cannot open directory %s\n", args[1]);
-            return 0;
+        char buffer[MAXLETTERS];
+        DIR * dir;
+        if (dir = opendir(args[1])) {
+            strcpy(buffer, args[1]);
+            closedir(dir);
         }
-        realpath(strcat(user->dir, args[1]), buffer);
-        closedir(dir);       
+
+        else {
+            fprintf(stderr, "mysh: no directory found");
+        }
+
+        strrchr(buffer, '/');
     }
     return 0;
 }
 
-int bye(FILE * fp, user_t * user, commands * history)
+int bye(FILE * fp, user_t user, commands * history)
 {
     fclose(fp);
-    free(user);
     free(history);
     clear();
     exit(0);
@@ -254,20 +246,21 @@ int main()
     FILE *fp = fopen("history.txt", "a+");
     char ** argv;
     char * input, * pipe = NULL;
-    int flag = 0;
+    int i = 0;
 
-    commands * history = malloc(sizeof(commands));
+    commands * history = malloc(MAXLETTERS * sizeof(commands));
 
-    user_t * user = malloc(sizeof(user_t));
-    user = initshell(user);
-    
+    user_t user = initshell(user);
+    fprintf(stdout, "%s\n", user.dir);
+
     while(1)
     {
         prompt(user);
+        fprintf(stdout, "%s\n", user.dir);
         input = readinput(fp);
         // fprintf(stdout, YELLOW "%s\n" RESET, input);
         argv = parser(input);
-        history = addtohistory(input, argv, fp, history);
+        history = addtohistory(input, argv, fp, history, i);
 
         // fprintf(stdout, YELLOW "%s" RESET, argv[0]);
 
