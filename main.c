@@ -195,6 +195,7 @@ void prompt(user_t user)
     strcpy(cwd, user.dir);
     // truncate directory for viewing ease
     char * dirprompt = strrchr(user.dir, '/');
+    dirprompt++;
     // print the prompt
     fprintf(stdout, GREEN "%s@%s: " RESET BLUE "%s " RESET "# ", user.username,
                                                                  user.host, dirprompt);
