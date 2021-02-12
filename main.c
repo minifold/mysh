@@ -26,25 +26,8 @@ typedef struct user {
 
 typedef struct commands {
     char * command;
-    char ** argv;
     int pid;
 }commands;
-
-// Function declarations
-user_t initshell(user_t user);
-int inithistory(FILE * fp, commands * history);
-commands * addtohistory(char * buffer, char ** args, FILE * fp, 
-                        commands * history, int i);
-FILE * readhistory(char ** argv, FILE * fp);
-void help();
-char * readinput(FILE * fp);
-char ** parser(char * input);
-int launch(user_t user, char ** args);
-int cwd(user_t user);
-void prompt(user_t user);
-int cd(char ** args, user_t user);
-int bye(FILE * fp, commands * history);
-
 
 user_t initshell(user_t user)
 {   
@@ -75,71 +58,38 @@ user_t initshell(user_t user)
     return user;
 }
 
-int inithistory(FILE * fp, commands * history)
+int inithistory(FILE * fp, char ** history)
 {
-    int i = 0;
-    char * buffer = NULL;
-    char ** args = NULL;
+    char *buffer = NULL;
     size_t len = 0;
-    commands comm;
+    int i = 0;
+    int size = MAXLETTERS;
 
-    while (getline(&buffer, &len, fp) != -1)
-    {
-        // If the substring "replay" doesn't exist in the buffer
-        if (strstr(buffer, "replay") == NULL) {
-            // Then go ahead and write it into the history array
-            strcpy(comm.command, buffer);
-            comm.argv = parser(comm.command);
-            comm.pid = 0;
+    history = (char **)malloc(MAXLETTERS * sizeof(char *));
+
+    while (getline(&buffer, &len, fp) != -1) {
+        history[i] = malloc(sizeof(buffer));
+        strcpy(history[i], buffer);
+        if (i >= size)
+        {
+            size += MAXLETTERS;
+            history = (char **)realloc(history, size * sizeof(char **));
         }
-        history[i] = comm;
-        i++;
+        i++;     
     }
+
+    i++;
+    free(buffer);
     return i;
 }
 
-commands * addtohistory(char * buffer, char ** args, FILE * fp, 
-                        commands * history, int i) {
-
-    int size = sizeof(history) / sizeof(* history);
-
-    if (fprintf(fp, "%s\n", buffer) < 0) {
-            fprintf(stderr, "mysh: error saving command to history.\n");
-            return history;
-    }
-
-    if (i > size)
-    {
-        size += MAXLETTERS;
-        history = realloc(history, size * sizeof(commands));
-    }
-
-    commands command; 
-    command.command = (char * )malloc(sizeof(buffer));
-    strcpy(command.command, buffer);
-    command.argv = (char ** )malloc(sizeof(args));
-    command.argv = args;
-    command.pid = 0;
-    
-    history[i] = command;
-
-    return history;
-}
-
-FILE * readhistory(char ** argv, FILE * fp)
+int addhistory(char * input, FILE * fp, char ** history, int i)
 {
-    char * buffer = malloc(MAXLETTERS * sizeof(char));
-
-    size_t len = 0;
-    if (!strcmp(argv[1], "-c"))
-        freopen("history.txt", "w+", fp);
-    
-    else
-        while (getline(&buffer, &len, fp) != EOF)
-            fprintf(stdout, "%s\n", buffer);
-
-    free(buffer);
-    return fp;
+    // history[i] = realloc(history[i], sizeof(input));
+    // strcpy(history[i], input);
+    fprintf(fp, "%s", input);
+    i++;
+    return i;
 }
 
 void help() {
@@ -207,30 +157,6 @@ char ** parser(char * input)
     return argv;
 }
 
-int launch(user_t user, char ** args)
-{
-    pid_t pid, wpid;
-    int status;
-    pid = fork();
-    
-    if (pid <= 0) {
-        if (execv(user.dir, args) < 0) {
-            fprintf(stderr, "mysh: error executing program\n");
-            return -1;
-        }
-        fprintf(stderr, "mysh: error forking program\n");
-        return -1;
-    }
-
-    else {
-        do {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-    }
-
-    return 1;
-}
-
 int cwd(user_t user) {
     if (user.dir == NULL) {
         fprintf(stderr, "mysh: current directory not found\n");
@@ -241,88 +167,108 @@ int cwd(user_t user) {
     return 1;
 }
 
-void prompt(user_t user)
-{    
-    char cwd[MAXLETTERS];
-    strcpy(cwd, user.dir);
-    // truncate directory for viewing ease
-    char * dirprompt = strrchr(user.dir, '/');
-    dirprompt++;
-    // print the prompt
-    fprintf(stdout, GREEN "%s@%s: " RESET BLUE "%s " RESET "# ", user.username,
-                                                                 user.host, dirprompt);
-    return;
-}
-
-int cd(char ** args, user_t user)
+user_t cd(char ** args, user_t user)
 {
     if (args[2] != NULL)
     {
         fprintf(stderr, "mysh: too many arguments\n");
-        return 0;
+        return user;
     }
 
     if (args[1] == NULL)
     {
         fprintf(stderr, "mysh: argument required\n");
-        return 0;
+        return user;
     }
 
     else
     {
-        char buffer[MAXLETTERS];
+        if (!strcmp(args[1], "~"))
+        {
+            char buf[PATH_MAX] = "/home/";
+            strcat(buf, user.username);
+            strcpy(args[1], buf);
+        }
+
+        char buffer[PATH_MAX];
         DIR * dir;
         if (dir = opendir(args[1])) {
-            strcpy(buffer, args[1]);
+            realpath(args[1], buffer);
             closedir(dir);
         }
 
         else {
             fprintf(stderr, "mysh: no directory found");
+            return user;
         }
 
-        strrchr(buffer, '/');
+        strcpy(user.dir, buffer);
+        printf("%s\n", buffer);
     }
-    return 0;
+
+    return user;
 }
 
-int bye(FILE * fp, commands * history)
+void prompt(user_t user)
+{    
+    char cwd[PATH_MAX];
+    char * dirprompt;
+
+    // change home to ~
+    if (!strcmp(user.dir, "/home/quantum"))
+    {
+        strcpy(cwd, "/home/");
+        strcat(cwd, user.username);
+        dirprompt = malloc(sizeof("~"));
+        strcpy(dirprompt, "~");
+    }
+    
+    // truncate directory for viewing ease
+    else {
+        strcpy(cwd, user.dir);
+        dirprompt = strrchr(user.dir, '/');
+        dirprompt++;
+    }
+    // print the prompt
+    fprintf(stdout, GREEN "%s@%s: " RESET BLUE "%s " RESET "# ", user.username,
+                                                                 user.host, dirprompt);
+    
+    return;
+}
+
+int bye(FILE * fp)
 {
     fclose(fp);
-    int i = 0;
-    int size = sizeof(history) / sizeof(commands);
-    for (i = 0; i < size; i++)
-    {
-        free(history[i].argv);
-        free(history[i].command);
-    }
-
-    free(history);
     clear();
     exit(0);
 }
 
+
 int main()
 {
     FILE * fp = fopen("history.txt", "a+");
-    commands * history = (commands *)malloc(MAXLETTERS * sizeof( * history)); 
-    char ** argv;
+    char ** argv, ** history = NULL;
     char * input, * pipe = NULL;
-    int i = inithistory(fp, history);
     user_t user = initshell(user);
+    int i = inithistory(fp, history);
 
     while(1)
     {
         prompt(user);
         input = readinput(fp);
+        i = addhistory(input, fp, history, i);
         // fprintf(stdout, YELLOW "%s\n" RESET, input);
         argv = parser(input);
 
-        history = addtohistory(input, argv, fp, history, i);
-
         // process whatever is in the buffer     
         if (!strcmp(argv[0], "byebye"))
-            bye(fp, history);       
+            bye(fp);
+
+        else if (!strcmp(argv[0], "whereami"))
+            cwd(user);  
+
+        else if (!strcmp(argv[0], "movetodir"))
+            user = cd(argv, user);    
     }
     return 0;
 }

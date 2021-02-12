@@ -1,19 +1,17 @@
+whereami
 
+byebye
 
-
-
-
-hello world
-hello world
-hello world
-hello world
-hello world
-hello worhello world
-hello world
-hello world
-hello world
-[A
-ls -a
-ls
-bye
-hellobyebyehellohellobyebye
+whereami
+movetodir
+byebye
+movetodir /home/quantum
+byebye
+byebye
+byebye
+movetodir ~
+byebye
+movetodir ~
+byebye
+movetodir ~
+byebye
