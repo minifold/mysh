@@ -70,3 +70,36 @@ int bye(FILE * fp, user_t * user, commands * history);
 //     } while (buffer[last] != '\n');
 //     return buf;
 // }
+
+
+
+
+        // fprintf(stdout, YELLOW "%s" RESET, argv[0]);
+
+        if (!strcmp(argv[0], "whereami"))
+        {
+            cwd(user);
+            continue;
+        }
+
+        else if (!strcmp(argv[0], "start"))
+            if (launch(user, argv) < 0)
+                continue;
+
+        else if (!strcmp(argv[0], "movetodir"))
+        {
+            cd(argv, user);
+            continue;
+        }
+
+        else if (!strcmp(argv[0], "history"))
+        {
+            fp = readhistory(argv, fp);
+            continue;
+        }
+
+        else if (!strcmp(argv[0], "byebye"))
+        {
+            bye(fp, user, history);
+            break;
+        }
