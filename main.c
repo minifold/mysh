@@ -288,7 +288,10 @@ char * pathcheck(char * path, user_t user)
 {
     char * new = (char *)calloc(MAXLETTERS, sizeof(char));
     char bin[MAXLETTERS] = "/usr/bin/";
-
+    // It works by checking if the executable is within /usr/bin
+    // If the string contains the substring /usr/bin then the start function
+    // tries to call it; if not, and there's no beginning / then try and see 
+    // if it's an exec in the current folder or a typo.
     if (strstr(path, bin) == NULL) {
             strcat(bin, path);
             strcpy (new, bin);
@@ -297,7 +300,7 @@ char * pathcheck(char * path, user_t user)
     // These two should not interfere with each other, since the previous if 
     // statement adds /usr/bin at the end, and the next statement checks if
     // the input has a / in the front.
-    else if (path[0] != '/') {
+    if (path[0] != '/') {
         strcpy(new, user.dir);
         strcat(new, "/");
         strcat(new, path);
@@ -327,6 +330,7 @@ void prompt(user_t user)
 {    
     char cwd[PATH_MAX];
     char * dirprompt;
+    // get the user's name for their home directory.
     char home[MAXLETTERS] = "/home/";
     strcat(home, user.username);
     // change home to ~
@@ -336,7 +340,6 @@ void prompt(user_t user)
         dirprompt = malloc(sizeof("~"));
         strcpy(dirprompt, "~");
     }
-    
     // truncate directory for viewing ease
     else {
         strcpy(cwd, user.dir);
