@@ -300,7 +300,7 @@ char * pathcheck(char * path, user_t user)
     // These two should not interfere with each other, since the previous if 
     // statement adds /usr/bin at the end, and the next statement checks if
     // the input has a / in the front.
-    if (path[0] != '/') {
+    else if (path[0] != '/') {
         strcpy(new, user.dir);
         strcat(new, "/");
         strcat(new, path);
