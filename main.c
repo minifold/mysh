@@ -77,11 +77,8 @@ user_t initshell(user_t user)
 
 char ** replay(char ** args, char ** history, int index)
 {
-    // Pretty easy oneliner. So long as you don't accidentally choose to replay a replay. 
-    // It should be that replay isn't stored in the history command but choosing to go into an 
-    // infinite loop isn't any of my business.
-    // Changed it to be a long rather than an int, so that it's 64 bits rather than 32.
-
+    // It should be that replay isn't stored in the history command but 
+    // choosing to go into an infinite loop isn't any of my business.
     int len = strlen(args[1]);
     for (int i = 0;  i < len - 1; i++)
         if (!isdigit(args[1][i])) {
