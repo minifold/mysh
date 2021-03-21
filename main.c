@@ -39,7 +39,7 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
 user_t cd(char ** args, user_t user);
 char * pathcheck(char * path, user_t user);
 int cwd(user_t user);
-int dalek(int pid);
+int dalek(pid_t pid, pid_t * pidarr);
 int background(char ** args, int * pidarr, user_t user, int i);
 char ** inithistory(FILE * fp, char ** history);
 int addhistory(char * input, FILE * fp, char ** history, int i);
@@ -54,7 +54,7 @@ user_t initshell(user_t user)
         "         Welcome to MySH!        \n"
         "                                 \n"
         "=================================\n"
-        "Written by Alex Cingoranelli.    \n"
+        "Alex Cingoranelli | Spring 2021  \n"
         "This was written with Unix in    \n"
         "mind. It is not compatible with  \n"
         "MSDOS.                        \n\n");
@@ -96,77 +96,81 @@ char ** replay(char ** args, char ** history, int index)
 
 char ** inithistory(FILE * fp, char ** history)
 {
-    char * buffer = NULL;
-    size_t len = 0;
+    // Preventing any sort of memory errors by just starting history with an 
+    // initial size of MAXLETTERS.
+    int init = MAXLETTERS;
+    // Initializing a counter variable as well.
     int i = 0;
-    int size = MAXLETTERS;
+    history = (char **)malloc(init * sizeof(char *));
+    char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
 
-    history = (char **)malloc(MAXLETTERS * sizeof(char *));
-
-    while (getline(&buffer, &len, fp) != -1) {
-        history[i] = malloc(sizeof(buffer));
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        history[i] = malloc(sizeof(buffer + 1));
         strcpy(history[i], buffer);
-        
-        if (i >= size)
-        {
-            size += MAXLETTERS;
-            history = (char **)realloc(history, size * sizeof(char **));
-        }
-        i++;     
-    }
-
-    i++;
-    // Cleaning up.
-    free(buffer);
-    return history;
-}
-
-int dalek(pid_t pid) {
-    // There should be some sort of logic to check if the pid is negative so 
-    // you don't do kill -1.
-    if (pid <= 0)
-        pid *= -1;  // + bit shift to positive
-
-    if (kill(pid, SIGKILL) == -1)
-    {
-        fprintf(stderr, "mysh: Error killing process.\n");
-        return -1;
+        i++;
     }
     
-    // Yay! We killed a process.
-    fprintf(stderr, " + killed %d\n", pid);
-
-    return 0;
-}
-
-void exterminate(int * pid)
-{
-    // This *should* work. 
-    int size = sizeof(pid) / sizeof(int *);
-    // Go through all pids and delete them, 
-    for (int i = 0; i < size; i++)
-    {
-        if (pid[i] > 0)
-            dalek(pid[i]);
+    if (feof(fp)) {
+        // When there's an end of file signal just create a single char pointer to NULL.
+        // The pointer doesn't incriment here so it should be overwritten.
+        history[i] = (char *)malloc(sizeof(char));
     }
 
-    return;
+    return history;
 }
 
 int addhistory(char * input, FILE * fp, char ** history, int i)
 {
-    // long size = sizeof(history) / sizeof(char **);
-    // fprintf(stdout, "%ld\n", size);
-    // fprintf(stdout, "%d\n", i);
-    // if (i > size)
-    //     size += MAXLETTERS;
-    //     history = realloc(history[i], size * sizeof(char **));
-    
-    // strcpy(history[i], input);
-    // fprintf(fp, "%s", input);
-    // i++;
+    int size = sizeof(history) / sizeof(char);
+    if (i >= size) {
+        size += MAXLETTERS;
+        history = (char **)realloc(history, size * sizeof(char *));
+    }
+
+    history[i] = (char *)realloc(history[i], sizeof(input));
+    strcpy(history[i], input);
+    fprintf(fp, "%s", input);
+    i++;
 
     return i;
+}
+
+FILE * readhistory(char ** argv, char ** history, FILE * fp, int index)
+{
+    // This checks three things: if the file should be cleared
+    // If the user checks a specific history number
+    // And if the user doesn't put anything, to just show the whole history.
+    char * buffer = malloc(MAXLETTERS * sizeof(char));
+
+    if (argv[2]) {
+        fprintf(stderr, RED "ERROR " RESET "mysh : too many arguments\n");
+        free(buffer);
+        return fp;
+    }
+
+    // reopen file
+    if (!strcmp(argv[1], "-c")) {
+        // I checked to make sure this doesn't lose any of the history commands.
+        // It shouldn't, but sometimes it did.
+        freopen("history.txt", "w+", fp);
+        for (int i = 0; i < index; i++)
+            free(history[i]);
+
+        fprintf(stdout, "mysh : history cleared\n");
+        index = 0;    
+    }
+
+    else if (argv[1] != NULL)
+        fprintf(stdout, "%s: %s\n", argv[1], history[index - atoi(argv[2])]);
+
+    else if (argv[1] == NULL) {
+        int histind = 0;
+        for (int i = index - 1; i >= 0; i--)
+            fprintf(stdout, "%d: %s\n", histind++, history[i]);
+    }
+
+    free(buffer);
+    return fp;
 }
 
 void help() {
@@ -420,41 +424,46 @@ int background(char ** args, int * pidarr, user_t user, int i)
     return i;
 }
 
-FILE * readhistory(char ** argv, char ** history, FILE * fp, int index)
+int dalek(pid_t pid, pid_t * pidarr) {
+    // There should be some sort of logic to check if the pid is negative so 
+    // you don't do kill -1.
+    if (pid <= 0)
+        pid *= -1;  // + change to positive
+
+    int size = sizeof(pidarr) / sizeof(pid_t);
+    int exists = 0;
+    for (int i = 0; i < size; i++)
+        if (pidarr[i] == pid)
+            exists = 1;
+    
+    if (exists == 0)
+    {
+        fprintf(stderr, RED "ERROR " RESET "mysh : pid does not exist.\n");
+        return -1;
+    }
+
+    if (kill(pid, SIGKILL) == -1)
+    {
+        fprintf(stderr, RED "ERROR " RESET "mysh : Error killing process.\n");
+        return -1;
+    }
+    
+    // Yay! We killed a process.
+    fprintf(stderr, " + killed %d\n", pid);
+
+    return 0;
+}
+
+void exterminate(int * pid)
 {
-    // This checks three things: if the file should be cleared
-    // If the user checks a specific history number
-    // And if the user doesn't put anything, to just show the whole history.
-    char * buffer = malloc(MAXLETTERS * sizeof(char));
+    // This *should* work. 
+    int size = sizeof(pid) / sizeof(int);
+    // Go through all pids and delete them, 
+    for (int i = 0; i < size; i++)
+        if (pid[i] > 0)
+            dalek(pid[i], pid);
 
-    if (argv[2]) {
-        fprintf(stderr, RED "ERROR " RESET "mysh : too many arguments");
-        free(buffer);
-        return fp;
-    }
-
-    // reopen file
-    if (!strcmp(argv[1], "-c")) {
-        // I checked to make sure this doesn't lose any of the history commands.
-        // It shouldn't, but sometimes it did.
-        freopen("history.txt", "w+", fp);
-        for (int i = 0; i < index; i++)
-            free(history[i]);
-
-        index = 0;    
-    }
-
-    else if (argv[1] != NULL)
-        fprintf(stdout, "%s: %s\n", argv[1], history[index - atoi(argv[2])]);
-
-    else if (argv[1] == NULL) {
-        int histind = 0;
-        for (int i = index - 1; i >= 0; i--)
-            fprintf(stdout, "%d: %s\n", histind++, history[i]);
-        }
-
-    free(buffer);
-    return fp;
+    return;
 }
 
 void bye(FILE * fp)
@@ -487,7 +496,7 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
         char ** ptr = NULL;
         if (argv[1] == NULL)
             fprintf(stderr, RED "ERROR " RESET "mysh : argument required for dalek\n");
-        dalek(strtol(argv[1], ptr, 10));
+        dalek(strtol(argv[1], ptr, 10), pid);
         pid[histindex] = 0;
     }
         
@@ -514,7 +523,7 @@ int main()
     char * input = NULL;
     user_t user = initshell(user);
     char ** history = inithistory(fp, history);
-    int histindex = 0;
+    int histindex = sizeof(history) / sizeof(char **);
     pid_t pid[MAX_INPUT] = { 0 };
 
     while(1)

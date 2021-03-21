@@ -70,3 +70,24 @@ int bye(FILE * fp, user_t * user, commands * history);
 //     } while (buffer[last] != '\n');
 //     return buf;
 // }
+
+ char buffer[MAXLETTERS];
+    size_t len = 0;
+    int i = 0;
+    int size = MAXLETTERS;
+
+    history = (char **)malloc(MAXLETTERS * sizeof(char **));
+
+    while (fscanf(fp, "%s", buffer) == 1) {
+        // printf("%s\n", buffer);
+        history[i] = malloc(sizeof(buffer));
+        strcpy(history[i], buffer);
+        i++;     
+    }
+    
+    history[i] = malloc(sizeof(buffer));
+    strcpy(history[i], buffer);
+
+    i++;
+    // Cleaning up.
+    return history;
