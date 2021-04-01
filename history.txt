@@ -1,9 +1,0 @@
-hello
-movetodir ..
-byebye
-hello
-byebye
-hello
-byebye
-hello
-byebye
