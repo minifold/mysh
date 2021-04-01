@@ -19,6 +19,7 @@
 // Max amount of letters. This is just for small things like literal strings 
 // and initializations.
 #define MAXLETTERS 4024
+#define SIGKILL 9
 // Clear function
 #define clear() printf("\033[H\033[J") 
 
@@ -33,17 +34,20 @@ typedef struct commands {
     int pid;
 }commands;
 
-user_t initshell(user_t user);
-void exterminate(int * pid);
+
+void addtohistory(char ** history, int history_count, char * args);
+int background(char ** args, int * pidarr, user_t user, int i);
 void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp);
 user_t cd(char ** args, user_t user);
-char * pathcheck(char * path, user_t user);
+// int checkhistory();
 int cwd(user_t user);
 int dalek(pid_t pid, pid_t * pidarr);
-int background(char ** args, int * pidarr, user_t user, int i);
-char ** inithistory(FILE * fp, char ** history);
-int addhistory(char * input, FILE * fp, char ** history, int i);
+void echo(char ** argv);
+void exterminate(int * pid);
+// char ** inithistory(FILE * fp, char ** history);
+user_t initshell(user_t user);
 char ** parser(char * input);
+char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
 
 user_t initshell(user_t user)
@@ -94,83 +98,21 @@ char ** replay(char ** args, char ** history, int index)
 
 }
 
-char ** inithistory(FILE * fp, char ** history)
+void addtohistory(FILE * fp, char ** history, int history_count, char * args)
 {
-    // Preventing any sort of memory errors by just starting history with an 
-    // initial size of MAXLETTERS.
-    int init = MAXLETTERS;
-    // Initializing a counter variable as well.
-    int i = 0;
-    history = (char **)malloc(init * sizeof(char *));
-    char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
-
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        history[i] = malloc(sizeof(buffer + 1));
-        strcpy(history[i], buffer);
-        i++;
+    fprintf(fp, args);
+   if (history_count < HISTORY_MAX_SIZE) {
+        history[history_count++] = strdup(args);
+   } 
+   // After some time simply delete the most recent history commands and 
+   // replace them.
+   else {
+        free(history[0]);
+        for (unsigned index = 1; index < HISTORY_MAX_SIZE; index++) {
+            history[index - 1] = history[index];
+        }
+        history[HISTORY_MAX_SIZE - 1] = strdup(args);
     }
-    
-    if (feof(fp)) {
-        // When there's an end of file signal just create a single char pointer to NULL.
-        // The pointer doesn't incriment here so it should be overwritten.
-        history[i] = (char *)malloc(sizeof(char));
-    }
-
-    return history;
-}
-
-int addhistory(char * input, FILE * fp, char ** history, int i)
-{
-    int size = sizeof(history) / sizeof(char);
-    if (i >= size) {
-        size += MAXLETTERS;
-        history = (char **)realloc(history, size * sizeof(char *));
-    }
-
-    history[i] = (char *)realloc(history[i], sizeof(input));
-    strcpy(history[i], input);
-    fprintf(fp, "%s", input);
-    i++;
-
-    return i;
-}
-
-FILE * readhistory(char ** argv, char ** history, FILE * fp, int index)
-{
-    // This checks three things: if the file should be cleared
-    // If the user checks a specific history number
-    // And if the user doesn't put anything, to just show the whole history.
-    char * buffer = malloc(MAXLETTERS * sizeof(char));
-
-    if (argv[2]) {
-        fprintf(stderr, RED "ERROR " RESET "mysh : too many arguments\n");
-        free(buffer);
-        return fp;
-    }
-
-    // reopen file
-    if (!strcmp(argv[1], "-c")) {
-        // I checked to make sure this doesn't lose any of the history commands.
-        // It shouldn't, but sometimes it did.
-        freopen("history.txt", "w+", fp);
-        for (int i = 0; i < index; i++)
-            free(history[i]);
-
-        fprintf(stdout, "mysh : history cleared\n");
-        index = 0;    
-    }
-
-    else if (argv[1] != NULL)
-        fprintf(stdout, "%s: %s\n", argv[1], history[index - atoi(argv[2])]);
-
-    else if (argv[1] == NULL) {
-        int histind = 0;
-        for (int i = index - 1; i >= 0; i--)
-            fprintf(stdout, "%d: %s\n", histind++, history[i]);
-    }
-
-    free(buffer);
-    return fp;
 }
 
 void help() {
@@ -454,6 +396,15 @@ int dalek(pid_t pid, pid_t * pidarr) {
     return 0;
 }
 
+void echo(char ** argv)
+{
+    int size = sizeof(argv) / sizeof(char **) + 1;
+
+    for (int i = 0; i < size; i++)
+        fprintf(stdout, "%s ", argv[i]);
+    fprintf(stdout, "\n");
+}
+
 void exterminate(int * pid)
 {
     // This *should* work. 
@@ -500,6 +451,12 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
         pid[histindex] = 0;
     }
         
+    else if (!strcmp(argv[0], "echo")) {
+        tmp++;
+        echo(tmp);
+        tmp = NULL;
+    }
+
     else if (!strcmp(argv[0], "background")) {
         tmp++;
         background(tmp, pid, user, histindex);
@@ -515,6 +472,21 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
         fprintf(stderr, "%s is not a valid command.\n", argv[0]);      
 }
 
+int checkhistory()
+{   
+    // Kind of stupid but you have to open the file in read to get to the 
+    // beginning of the file. So in order to read in all of the history files
+    // I just open history again, rifle through it, and close it. 
+    FILE * fp = fopen("history.txt", "r");
+    int i = 0;
+    // This is probably bad practice.
+    for (char c = getc(fp); c != EOF; c = getc(fp))
+        if (c == '\n') // Increment count if this character is newline
+            i++;
+    fclose(fp);
+    return i;
+}
+
 // Driver function.
 int main()
 {
@@ -523,7 +495,7 @@ int main()
     char * input = NULL;
     user_t user = initshell(user);
     char ** history = inithistory(fp, history);
-    int histindex = sizeof(history) / sizeof(char **);
+    int histindex = checkhistory();
     pid_t pid[MAX_INPUT] = { 0 };
 
     while(1)
