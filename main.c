@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,16 +28,18 @@ typedef struct user {
     char * username;
     char * host;
     char * dir;
-}user_t;
+} user_t;
 
 typedef struct commands {
     char * command;
     int pid;
-}commands;
+} commands;
 
+// Global variables
 int histindex = 0;
 long MAXHISTSIZE = 0;
 
+// Function declarations
 char ** addtohistory(FILE * fp, char ** history, char * args);
 int background(char ** args, int * pidarr, user_t user, int i);
 void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp);
@@ -51,6 +54,8 @@ char ** parser(char * input);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
 
+
+// Initialize shell function
 user_t initshell(user_t user)
 {   
     clear();
@@ -80,14 +85,13 @@ user_t initshell(user_t user)
     return user;
 }
 
-char ** replay(char ** args, char ** history, int index)
-{
+char ** replay(char ** args, char ** history, int index) {
     // It should be that replay isn't stored in the history command but 
     // choosing to go into an infinite loop isn't any of my business.
     int len = strlen(args[1]);
     for (int i = 0;  i < len - 1; i++)
         if (!isdigit(args[1][i])) {
-            fprintf(stderr, RED "ERROR " RESET "mysh : %s not a number\n", args[1]);
+            fprintf(stderr, RED "ERROR " RESET "mysh: %s not a number\n", args[1]);
             return NULL;
         }
     
@@ -95,12 +99,11 @@ char ** replay(char ** args, char ** history, int index)
     if (num > 0 && num < index)
         return parser(history[num]);
     else 
-        fprintf(stderr, RED "ERROR " RESET "mysh : number out of range\n");    
+        fprintf(stderr, RED "ERROR " RESET "mysh: number out of range\n");    
 
 }
 
-char ** inithistory(FILE * fp)
-{
+char ** inithistory(FILE * fp) {
     long size = MAXLETTERS;
     char * histstring = "history.txt";
     char ** history = (char **)malloc(size * sizeof(char *)); 
@@ -121,15 +124,21 @@ char ** inithistory(FILE * fp)
     return history;
 }
 
-char ** addtohistory(FILE * fp, char ** history, char * args)
-{
+char ** addtohistory(FILE * fp, char ** history, char * args) {
+    // Print to file
+    // Check if history is openable
+    if (!(fp = fopen("history.txt", "w"))) {
+        printf("mysh: error opening history file.\n");
+        exit(1);
+    }
+
     fprintf(fp, "%s\n", args);
-   if (histindex < MAXHISTSIZE) {
+    if (histindex < MAXHISTSIZE) {
         history[histindex++] = strdup(args);
-   } 
-   // After some time simply delete the most recent history commands and 
-   // replace them.
-   else {
+    } 
+    // After some time simply delete the most recent history commands and 
+    // replace them.
+    else {
         free(history[0]);
         for (unsigned i = 1; i < MAXHISTSIZE; i++) {
             history[i - 1] = history[i];
@@ -160,8 +169,7 @@ char * readinput(FILE * fp) {
     size_t size = 0, last = 0;
     char * buffer = NULL;
 
-    do
-    {
+    do {
         size += MAXLETTERS;
         
         if (!(buffer = realloc(buffer, size + 1)))
@@ -213,20 +221,28 @@ int cwd(user_t user) {
 }
 
 user_t cd(char ** args, user_t user) {
-    char buffer[PATH_MAX];
+    char * buffer = (char *)calloc(PATH_MAX, sizeof(char));
     DIR * dir = NULL;
     
     if (args[2] != NULL) {
         fprintf(stderr, "mysh: too many arguments\n");
+        free(buffer);
         return user;
     }
 
     if (args[1] == NULL) {
         fprintf(stderr, "mysh: argument required\n");
+        free(buffer);
         return user;
     }
 
     else {
+        if (args[1][0] != '/') {
+            strcpy(buffer, user.dir);
+            strcat(buffer, "/");
+            strcat(buffer, args[1]);
+        }
+
         if (!strcmp(args[1], "~")) {
             char buf[PATH_MAX] = "/home/";
             strcat(buf, user.username);
@@ -242,58 +258,19 @@ user_t cd(char ** args, user_t user) {
         }
 
         else {
-            fprintf(stderr, RED "ERROR" RESET "mysh: no directory found");
+            fprintf(stderr, RED "ERROR" RESET "mysh: no directory found\n");
+            free(buffer);
             return user;
         }
 
         strcpy(user.dir, buffer);
-        printf("%s\n", buffer);
+        // printf("%s\n", buffer);
     }
 
+    free(buffer);
     return user;
 }
 
-char * pathcheck(char * path, user_t user)
-{
-    char * new = (char *)calloc(MAXLETTERS, sizeof(char));
-    char bin[MAXLETTERS] = "/usr/bin/";
-    // It works by checking if the executable is within /usr/bin
-    // If the string contains the substring /usr/bin then the start function
-    // tries to call it; if not, and there's no beginning / then try and see 
-    // if it's an exec in the current folder or a typo.
-    if (strstr(path, bin) == NULL) {
-            strcat(bin, path);
-            strcpy (new, bin);
-            // strcpy(new, path);
-    }
-    // These two should not interfere with each other, since the previous if 
-    // statement adds /usr/bin at the end, and the next statement checks if
-    // the input has a / in the front.
-    else if (path[0] != '/') {
-        strcpy(new, user.dir);
-        strcat(new, "/");
-        strcat(new, path);
-        // Checks if specified path exists. 
-        if (!realpath(path, new)) {
-            // if It doesn't exist in the current directory, check to see if 
-            // it is a system function
-            free(new);
-            new = (char *)calloc(MAXLETTERS, sizeof(char));
-            strcat(bin, path);
-            strcpy(new, bin);
-            if (!realpath(path, new)) {
-                fprintf(stderr, RED "ERROR " RESET "mysh : program %s does not exist.\n", new);
-                fprintf(stderr, "Try calling the program name or direct path from /usr/bin/ instead.\n");
-                return NULL;
-            }
-        }
-    }
-
-    else
-        strcpy(new, path);
-
-    return new;
-}
 
 void prompt(user_t user)
 {    
@@ -325,22 +302,15 @@ void prompt(user_t user)
 int start(char ** args, user_t user) {
     // Fork the current process, then change the child process to the 
     // program you want to run.
-    pid_t pid;
+    pid_t pid = fork();
     int status;
-    
-    char * path = pathcheck(args[0], user);
 
-    if (!path)
-        return 0;
-    
-    pid = fork();
     if (pid < 0)
         fprintf(stderr, RED "ERROR" RESET "mysh: process forking failed\n");
     
     if (pid == 0)
-        if (execvp(path, args) == -1) {
+        if (execvp(args[0], args) == -1) {
             fprintf(stderr, RED "ERROR " RESET "mysh : program exec failure\n");
-            free(path);
             return -1; 
         }
     
@@ -348,7 +318,6 @@ int start(char ** args, user_t user) {
         waitpid(pid, &status, 0);
     }
 
-    free(path);
     return 1;
 }
 
@@ -365,19 +334,13 @@ int background(char ** args, int * pidarr, user_t user, int i)
     }
 
     pid = fork();
-    char * path = pathcheck(args[0], user);
-    if (!path) {
-        free(path);
-        return 0;
-    }
 
     if (pid < 0) 
         fprintf(stderr, RED "ERROR " RESET "mysh : process forking failed\n");
     
     if (pid == 0)
-        if (execvp(path, args) == -1){
+        if (execvp(args[0], args) == -1){
             fprintf(stderr, RED "ERROR " RESET "mysh : program exec failure\n");
-            free(path);
             return -1;
         }
        
@@ -386,12 +349,11 @@ int background(char ** args, int * pidarr, user_t user, int i)
     // Increment the history counter.
     i++;
     printf("+ background pid: %i, command: %s\n", pid, args[0]);
-    free(path);
     return i;
 }
 
 void repeat(char ** args) {
-    if (args[0] = "") {
+    if (args[0] == "") {
 
     }
 }
@@ -447,7 +409,11 @@ void exterminate(int * pid) {
     return;
 }
 
-void bye(FILE * fp) {
+void bye(char ** history, FILE * fp) {
+    for ( int i = 0; i < histindex; i++ ) {
+        free(history[i]);
+    }
+    free(history);
     fflush(stdin);
     fclose(fp);
     clear();
@@ -475,6 +441,7 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
         char ** ptr = NULL;
         if (argv[1] == NULL)
             fprintf(stderr, RED "ERROR " RESET "mysh : argument required for dalek\n");
+        
         dalek(strtol(argv[1], ptr, 10), pid);
         pid[histindex] = 0;
     }
@@ -533,7 +500,7 @@ int main() {
         }
 
         else if (!strcmp(argv[0], "byebye") || !strcmp(argv[0], "^C")) {
-            bye(fp);
+            bye(history, fp);
             break;
         }
 
