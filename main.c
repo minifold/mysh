@@ -34,17 +34,18 @@ typedef struct commands {
     int pid;
 }commands;
 
+int histindex = 0;
+long MAXHISTSIZE = 0;
 
-void addtohistory(char ** history, int history_count, char * args);
+char ** addtohistory(FILE * fp, char ** history, char * args);
 int background(char ** args, int * pidarr, user_t user, int i);
 void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp);
 user_t cd(char ** args, user_t user);
-// int checkhistory();
 int cwd(user_t user);
 int dalek(pid_t pid, pid_t * pidarr);
 void echo(char ** argv);
 void exterminate(int * pid);
-// char ** inithistory(FILE * fp, char ** history);
+char ** inithistory(FILE * fp);
 user_t initshell(user_t user);
 char ** parser(char * input);
 char * pathcheck(char * path, user_t user);
@@ -98,21 +99,45 @@ char ** replay(char ** args, char ** history, int index)
 
 }
 
-void addtohistory(FILE * fp, char ** history, int history_count, char * args)
+char ** inithistory(FILE * fp)
 {
-    fprintf(fp, args);
-   if (history_count < HISTORY_MAX_SIZE) {
-        history[history_count++] = strdup(args);
+    long size = MAXLETTERS;
+    char * histstring = "history.txt";
+    char ** history = (char **)malloc(size * sizeof(char *)); 
+    char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
+
+    if (fp != NULL) {
+        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            if (histindex >= size) {
+                size += MAXLETTERS;
+                history = (char **)realloc(history, size * sizeof(char *));
+            } 
+            history[histindex] = malloc(sizeof(buffer));
+            strcpy(history[histindex], buffer);
+            histindex++;
+        }
+    }
+    free(buffer);
+    return history;
+}
+
+char ** addtohistory(FILE * fp, char ** history, char * args)
+{
+    fprintf(fp, "%s\n", args);
+   if (histindex < MAXHISTSIZE) {
+        history[histindex++] = strdup(args);
    } 
    // After some time simply delete the most recent history commands and 
    // replace them.
    else {
         free(history[0]);
-        for (unsigned index = 1; index < HISTORY_MAX_SIZE; index++) {
-            history[index - 1] = history[index];
+        for (unsigned i = 1; i < MAXHISTSIZE; i++) {
+            history[i - 1] = history[i];
         }
-        history[HISTORY_MAX_SIZE - 1] = strdup(args);
+        history[MAXHISTSIZE - 1] = strdup(args);
     }
+
+    return history;
 }
 
 void help() {
@@ -131,8 +156,7 @@ void help() {
     return;
 }
 
-char * readinput(FILE * fp)
-{   
+char * readinput(FILE * fp) {   
     size_t size = 0, last = 0;
     char * buffer = NULL;
 
@@ -154,8 +178,7 @@ char * readinput(FILE * fp)
     return buffer;
 }
 
-char ** parser(char * input)
-{
+char ** parser(char * input) {
     int i = 0, size = MAXLETTERS;
     char ** argv = malloc(MAXLETTERS * sizeof(char *));
     // Deal with all cases of delimiters: tabs, newlines, spaces, bell spaces, 
@@ -224,7 +247,7 @@ user_t cd(char ** args, user_t user) {
         }
 
         strcpy(user.dir, buffer);
-        // printf("%s\n", buffer);
+        printf("%s\n", buffer);
     }
 
     return user;
@@ -366,6 +389,12 @@ int background(char ** args, int * pidarr, user_t user, int i)
     return i;
 }
 
+void repeat(char ** args) {
+    if (args[0] = "") {
+
+    }
+}
+
 int dalek(pid_t pid, pid_t * pidarr) {
     // There should be some sort of logic to check if the pid is negative so 
     // you don't do kill -1.
@@ -396,17 +425,17 @@ int dalek(pid_t pid, pid_t * pidarr) {
     return 0;
 }
 
-void echo(char ** argv)
-{
-    int size = sizeof(argv) / sizeof(char **) + 1;
-
-    for (int i = 0; i < size; i++)
-        fprintf(stdout, "%s ", argv[i]);
-    fprintf(stdout, "\n");
+void echo(char ** argv) {
+    int i = 0;
+    char strings[2] = { '"', "'" };
+    if (!strcmp(argv[0][0], '"')) {
+        while ()
+            fprintf(stdout, "%s ", argv[i]);
+        fprintf(stdout, "\n");
+    }
 }
 
-void exterminate(int * pid)
-{
+void exterminate(int * pid) {
     // This *should* work. 
     int size = sizeof(pid) / sizeof(int);
     // Go through all pids and delete them, 
@@ -417,16 +446,14 @@ void exterminate(int * pid)
     return;
 }
 
-void bye(FILE * fp)
-{
+void bye(FILE * fp) {
     fflush(stdin);
     fclose(fp);
     clear();
     return;
 }
 
-void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp)
-{
+void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp) {
     char ** tmp = argv;
     
     if (!strcmp(argv[0], "whereami"))
@@ -460,10 +487,18 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
     else if (!strcmp(argv[0], "background")) {
         tmp++;
         background(tmp, pid, user, histindex);
+        tmp = NULL;
     }
 
-    else if (!strcmp(argv[0], "history"))
-        fp = readhistory(argv, history, fp, histindex);
+    else if (!strcmp(argv[0], "repeat")) {
+        tmp++;
+        repeat(argv);
+        tmp = NULL;
+    }
+
+    else if (!strcmp(argv[0], "history")) {
+        // fp = readhistory(argv, history, fp, histindex);
+    }
 
     else if (!strcmp(argv[0], "movetodir"))
         user = cd(argv, user);
@@ -472,30 +507,13 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
         fprintf(stderr, "%s is not a valid command.\n", argv[0]);      
 }
 
-int checkhistory()
-{   
-    // Kind of stupid but you have to open the file in read to get to the 
-    // beginning of the file. So in order to read in all of the history files
-    // I just open history again, rifle through it, and close it. 
-    FILE * fp = fopen("history.txt", "r");
-    int i = 0;
-    // This is probably bad practice.
-    for (char c = getc(fp); c != EOF; c = getc(fp))
-        if (c == '\n') // Increment count if this character is newline
-            i++;
-    fclose(fp);
-    return i;
-}
-
 // Driver function.
-int main()
-{
+int main() {
     FILE * fp = fopen("history.txt", "a+");
     char ** argv;
     char * input = NULL;
     user_t user = initshell(user);
-    char ** history = inithistory(fp, history);
-    int histindex = checkhistory();
+    char ** history = inithistory(fp);
     pid_t pid[MAX_INPUT] = { 0 };
 
     while(1)
@@ -504,7 +522,7 @@ int main()
         // process whatever is in the buffer
         fflush(stdin);
         input = readinput(fp);
-        histindex = addhistory(input, fp, history, histindex);
+        history = addtohistory(fp, history, input);
         argv = parser(input);
 
         // If you put this at the top it still has 
@@ -513,7 +531,7 @@ int main()
             builtin(argv, user, pid, history, histindex, fp);
         }
 
-        else if (!strcmp(argv[0], "byebye")) {
+        else if (!strcmp(argv[0], "byebye") || !strcmp(argv[0], "^C")) {
             bye(fp);
             break;
         }

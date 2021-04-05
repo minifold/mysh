@@ -1,23 +1,24 @@
-char ** inithistory(FILE * fp, char ** history)
+int histindex = 0;
+
+char ** inithistory(FILE * fp)
 {
-    // Preventing any sort of memory errors by just starting history with an 
-    // initial size of MAXLETTERS.
-    int init = MAXLETTERS;
-    // Initializing a counter variable as well.
-    int i = 0;
-    history = (char **)malloc(init * sizeof(char *));
+    long size = MAXLETTERS;
+    char * histstring = "history.txt";
+    char ** history = (char **)malloc(size * sizeof(char *)); 
     char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
 
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        history[i] = malloc(sizeof(buffer + 1));
-        strcpy(history[i], buffer);
-        i++;
-    }
-    
-    if (feof(fp)) {
-        // When there's an end of file signal just create a single char pointer to NULL.
-        // The pointer doesn't incriment here so it should be overwritten.
-        history[i] = (char *)malloc(sizeof(char));
+    if (fopen(fp, histstring, "a+") != NULL)
+    {
+        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            if (i >= size)
+            {
+                size += MAXLETTERS;
+                history = (char **)realloc(size * sizeof(char *));
+            } 
+            history[i] = malloc(sizeof(buffer + 1));
+            strcpy(history[i], buffer);
+            histindex++;
+        }
     }
     free(buffer);
     return history;
@@ -36,6 +37,21 @@ int addhistory(char * input, FILE * fp, char ** history, int i)
     fprintf(fp, "%s", input);
     i++;
 
+    return i;
+}
+
+int checkhistory()
+{   
+    // Kind of stupid but you have to open the file in read to get to the 
+    // beginning of the file. So in order to read in all of the history files
+    // I just open history again, rifle through it, and close it. 
+    FILE * fp = fopen("history.txt", "r");
+    int i = 0;
+    // This is probably bad practice.
+    for (char c = getc(fp); c != EOF; c = getc(fp))
+        if (c == '\n') // Increment count if this character is newline
+            i++;
+    fclose(fp);
     return i;
 }
 
