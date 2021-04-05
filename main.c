@@ -45,6 +45,7 @@ int background(char ** args, int * pidarr, user_t user, int i);
 void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
+void repeat(char ** args, int * pidarr, user_t user, int i);
 int dalek(pid_t pid, pid_t * pidarr);
 void echo(char ** argv);
 void exterminate(int * pid);
@@ -352,10 +353,20 @@ int background(char ** args, int * pidarr, user_t user, int i)
     return i;
 }
 
-void repeat(char ** args) {
-    if (args[0] == "") {
-
+void repeat(char ** args, int * pidarr, user_t user, int i) {
+    int num;
+    char ** tmp = args;
+    if (!(num = atoi(args[0])))
+    {
+        fprintf(stderr, "mysh: first argument must be a number\n");
+        return;
     }
+    tmp++;
+    while (num > 0) {
+        i = background(tmp, pidarr, user, i);
+        num++;
+    }
+    return;
 }
 
 int dalek(pid_t pid, pid_t * pidarr) {
@@ -460,7 +471,7 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
 
     else if (!strcmp(argv[0], "repeat")) {
         tmp++;
-        repeat(argv);
+        repeat(argv, pid, user, histindex);
         tmp = NULL;
     }
 
