@@ -344,9 +344,10 @@ int start(char ** args, user_t user) {
             return -1; 
         }
     
-    else
+    else {
         waitpid(pid, &status, 0);
-    
+    }
+
     free(path);
     return 1;
 }
@@ -426,13 +427,13 @@ int dalek(pid_t pid, pid_t * pidarr) {
 }
 
 void echo(char ** argv) {
-    int i = 0;
-    char strings[2] = { '"', "'" };
-    if (!strcmp(argv[0][0], '"')) {
-        while ()
-            fprintf(stdout, "%s ", argv[i]);
-        fprintf(stdout, "\n");
-    }
+    // int i = 0;
+    // char strings[2] = { '"', ''' };
+    // if (!strcmp(argv[i][0], '"')) {
+    //    while (!strrchr(argv[i], '"'))
+    //        fprintf(stdout, "%s ", argv[i]);
+    //    fprintf(stdout, "\n");
+    // }
 }
 
 void exterminate(int * pid) {
