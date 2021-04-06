@@ -55,7 +55,7 @@ user_t initshell(user_t user);
 char ** parser(char * input);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
-void bye(FILE * fp);
+void bye(user_t user, FILE * fp);
 
 
 // Initialize shell function
@@ -72,12 +72,19 @@ user_t initshell(user_t user)
         "mind. It is not compatible with  \n"
         "MSDOS.                        \n\n");
 
+    // Retrieve username
     user.username = getenv("USER");
-    user.host = malloc(sizeof(char) * MAXLETTERS);
+
+    // Retrieve directory
+    // This is just the way it works. I don't know why, but I tried setting it
+    // Through malloc and got a world of pain. So at least I don't have to free
+    // this.
     char pwd[MAXLETTERS];
     user.dir = malloc(sizeof(pwd));
     strcpy(user.dir, getcwd(pwd, sizeof(pwd)));
-
+    
+    // Retrieve hostname
+    user.host = (char *)malloc(sizeof(char) * MAXLETTERS);
     gethostname(user.host, sizeof(user.host));
     
     printf("USER is: %s\n", user.username);
@@ -427,8 +434,10 @@ void exterminate(int * pid) {
     return;
 }
 
-void bye(FILE * fp) {
-    // fflush(stdin);
+void bye(user_t user, FILE * fp) {
+    // free(user.username);
+    // free(user.dir);
+    // free(user.host);
     fclose(fp);
     clear();
     return;
@@ -522,7 +531,7 @@ int main() {
         }
 
         else if (!strcmp(argv[0], "byebye") || !strcmp(argv[0], "^C")) {
-            bye(fp);
+            bye(user, fp);
             break;
         }
 
