@@ -42,7 +42,8 @@ long MAXHISTSIZE = 0;
 // Function declarations
 char ** addtohistory(FILE * fp, char ** history, char * args);
 int background(char ** args, int * pidarr, user_t user, int i);
-void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp);
+void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
+                        char ** history, int histindex, FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
 void repeat(char ** args, int * pidarr, user_t user, int i);
@@ -54,6 +55,7 @@ user_t initshell(user_t user);
 char ** parser(char * input);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
+void bye(FILE * fp);
 
 
 // Initialize shell function
@@ -73,7 +75,8 @@ user_t initshell(user_t user)
     user.username = getenv("USER");
     user.host = malloc(sizeof(char) * MAXLETTERS);
     char pwd[MAXLETTERS];
-    user.dir = getcwd(pwd, sizeof(pwd));
+    user.dir = malloc(sizeof(pwd));
+    strcpy(user.dir, getcwd(pwd, sizeof(pwd)));
 
     gethostname(user.host, sizeof(user.host));
     
@@ -123,6 +126,11 @@ char ** inithistory(FILE * fp) {
     }
     free(buffer);
     return history;
+}
+
+FILE * readhistory(char ** argv, char ** history, FILE * fp)
+{
+    return fp;
 }
 
 char ** addtohistory(FILE * fp, char ** history, char * args) {
@@ -272,10 +280,9 @@ user_t cd(char ** args, user_t user) {
     return user;
 }
 
-
 void prompt(user_t user)
 {    
-    char cwd[PATH_MAX];
+    char cwd[PATH_MAX] = { 0 };
     char * dirprompt;
     // get the user's name for their home directory.
     char home[MAXLETTERS] = "/home/";
@@ -420,18 +427,19 @@ void exterminate(int * pid) {
     return;
 }
 
-void bye(char ** history, FILE * fp) {
-    for ( int i = 0; i < histindex; i++ ) {
-        free(history[i]);
-    }
-    free(history);
-    fflush(stdin);
+void bye(FILE * fp) {
+    // fflush(stdin);
     fclose(fp);
     clear();
     return;
 }
 
-void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histindex, FILE * fp) {
+void make() {
+
+}
+
+void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
+                        char ** history, int histindex, FILE * fp) {
     char ** tmp = argv;
     
     if (!strcmp(argv[0], "whereami"))
@@ -476,14 +484,14 @@ void builtin(char ** argv, user_t user, pid_t * pid, char ** history, int histin
     }
 
     else if (!strcmp(argv[0], "history")) {
-        // fp = readhistory(argv, history, fp, histindex);
+        fp = readhistory(argv, history, fp);
     }
 
     else if (!strcmp(argv[0], "movetodir"))
         user = cd(argv, user);
 
     else
-        fprintf(stderr, "%s is not a valid command.\n", argv[0]);      
+        fprintf(stderr, "%s is not a valid command.\n", input);      
 }
 
 // Driver function.
@@ -504,24 +512,26 @@ int main() {
         history = addtohistory(fp, history, input);
         argv = parser(input);
 
+        if (argv[0] == NULL)
+            continue;
+
         // If you put this at the top it still has 
         if (!strcmp(argv[0], "replay")) {
             argv = replay(argv, history, histindex);
-            builtin(argv, user, pid, history, histindex, fp);
+            builtin(input, argv, user, pid, history, histindex, fp);
         }
 
         else if (!strcmp(argv[0], "byebye") || !strcmp(argv[0], "^C")) {
-            bye(history, fp);
+            bye(fp);
             break;
         }
 
         else
-           builtin(argv, user, pid, history, histindex, fp);
+           builtin(input, argv, user, pid, history, histindex, fp);
 
         free(input);
         free(argv);
     }
 
-    free(user.host);
     return 0;
 }
