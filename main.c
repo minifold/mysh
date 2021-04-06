@@ -48,9 +48,9 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
 void repeat(char ** args, int * pidarr, user_t user, int i);
-dalek(pid_t pid, pid_t * pidarr, long pidsize);
+int dalek(pid_t pid, pid_t * pidarr);
 void echo(char ** argv);
-void exterminate(int * pid);
+void dalekall(int * pid);
 char ** inithistory(FILE * fp);
 user_t initshell(user_t user);
 char ** parser(char * input);
@@ -156,12 +156,12 @@ FILE * readhistory(char ** argv, char ** history, FILE * fp)
 char ** addtohistory(FILE * fp, char ** history, char * args) {
     // Print to file
     // Check if history is openable
-    if (!(fp = fopen("history.txt", "w"))) {
+    if (!fp) {
         printf("mysh: error opening history file.\n");
         return history;
     }
 
-    fprintf(fp, "%s\n", args);
+    fprintf(fp, "%s", args);
     if (histindex < MAXHISTSIZE) {
         history[histindex++] = strdup(args);
     } 
@@ -396,7 +396,7 @@ void repeat(char ** args, int * pidarr, user_t user, int i) {
     return;
 }
 
-int dalek(pid_t pid, pid_t * pidarr, long pidsize) {
+int dalek(pid_t pid, pid_t * pidarr) {
     // There should be some sort of logic to check if the pid is negative so 
     // you don't do kill -1.
     if (pid <= 0)
@@ -435,11 +435,10 @@ void echo(char ** argv) {
     // }
 }
 
-void exterminate(int * pid) {
+void dalekall(int * pid) {
     // This *should* work. 
-    int size = sizeof(pid) / sizeof(int);
     // Go through all pids and delete them, 
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i < pidsize; i++)
         if (pid[i] > 0)
             dalek(pid[i], pid);
 
@@ -468,6 +467,7 @@ int make(char * filename) {
 
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
                         char ** history, int histindex, FILE * fp) {
+    
     char ** tmp = argv;
     
     if (!strcmp(argv[0], "whereami"))
@@ -486,12 +486,16 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         
     else if (!strcmp(argv[0], "dalek")) {
         char ** ptr = NULL;
+        int decimal = 10;
         if (argv[1] == NULL)
             fprintf(stderr, RED "ERROR " RESET "mysh : argument required for dalek\n");
         
-        dalek(strtol(argv[1], ptr, 10), pid, pidsize);
+        dalek(strtol(argv[1], ptr, decimal), pid);
         pid[histindex] = 0;
     }
+
+    else if (!strcmp(argv[0], "dalekall"))
+        dalekall(pid);
         
     else if (!strcmp(argv[0], "echo")) {
         tmp++;
@@ -513,6 +517,13 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 
     else if (!strcmp(argv[0], "history")) {
         fp = readhistory(argv, history, fp);
+    }
+
+    else if (!strcmp(argv[0], "maik"))
+    {
+        tmp++;
+        make(argv);
+        tmp = NULL;
     }
 
     else if (!strcmp(argv[0], "movetodir"))
