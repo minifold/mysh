@@ -37,6 +37,7 @@ typedef struct commands {
 
 // Global variables
 int histindex = 0;
+int pidsize = 0;
 long MAXHISTSIZE = 0;
 
 // Function declarations
@@ -47,7 +48,7 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
 void repeat(char ** args, int * pidarr, user_t user, int i);
-int dalek(pid_t pid, pid_t * pidarr);
+dalek(pid_t pid, pid_t * pidarr, long pidsize);
 void echo(char ** argv);
 void exterminate(int * pid);
 char ** inithistory(FILE * fp);
@@ -116,7 +117,6 @@ char ** replay(char ** args, char ** history, int index) {
 
 char ** inithistory(FILE * fp) {
     long size = MAXLETTERS;
-    char * histstring = "history.txt";
     char ** history = (char **)malloc(size * sizeof(char *)); 
     char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
 
@@ -137,6 +137,19 @@ char ** inithistory(FILE * fp) {
 
 FILE * readhistory(char ** argv, char ** history, FILE * fp)
 {
+    // reopen file
+    if (!strcmp(argv[1], "-c")) {
+        // I checked to make sure this doesn't lose any of the history commands.
+        // It shouldn't, but sometimes it did.
+        for (int i = 0; i < histindex; i++)
+            free(history[i]);
+        
+        freopen("history.txt", "w+", fp);
+
+        fprintf(stdout, "mysh: history cleared\n");
+        histindex = 0;    
+    }
+
     return fp;
 }
 
@@ -145,7 +158,7 @@ char ** addtohistory(FILE * fp, char ** history, char * args) {
     // Check if history is openable
     if (!(fp = fopen("history.txt", "w"))) {
         printf("mysh: error opening history file.\n");
-        exit(1);
+        return history;
     }
 
     fprintf(fp, "%s\n", args);
@@ -383,15 +396,14 @@ void repeat(char ** args, int * pidarr, user_t user, int i) {
     return;
 }
 
-int dalek(pid_t pid, pid_t * pidarr) {
+int dalek(pid_t pid, pid_t * pidarr, long pidsize) {
     // There should be some sort of logic to check if the pid is negative so 
     // you don't do kill -1.
     if (pid <= 0)
         pid *= -1;  // + change to positive
 
-    int size = sizeof(pidarr) / sizeof(pid_t);
     int exists = 0;
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i < pidsize; i++)
         if (pidarr[i] == pid)
             exists = 1;
     
@@ -435,16 +447,23 @@ void exterminate(int * pid) {
 }
 
 void bye(user_t user, FILE * fp) {
-    // free(user.username);
-    // free(user.dir);
-    // free(user.host);
+    // I was under the impression I would have to free the user struct pointers
+    // after I was done with them, but when I did so I got an error.
     fclose(fp);
     clear();
     return;
 }
 
-void make() {
+int make(char * filename) {
+    FILE * fp;
 
+    if (!(fp = fopen(filename, "w"))) {
+        fprintf(stderr, RED "ERROR" RESET "mysh: file could not be created\n");
+        return 0;
+    }
+
+    fclose(fp);
+    return 1;
 }
 
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
@@ -470,7 +489,7 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         if (argv[1] == NULL)
             fprintf(stderr, RED "ERROR " RESET "mysh : argument required for dalek\n");
         
-        dalek(strtol(argv[1], ptr, 10), pid);
+        dalek(strtol(argv[1], ptr, 10), pid, pidsize);
         pid[histindex] = 0;
     }
         

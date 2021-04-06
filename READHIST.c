@@ -10,6 +10,7 @@
 // 2. write string to file 
 // 3. free 
 // 4. 
+<<<<<<< HEAD
 int histindex = 0;
 
 char ** inithistory(FILE * fp)
@@ -34,6 +35,23 @@ char ** inithistory(FILE * fp)
     }
     free(buffer);
     return history;
+=======
+char ** inithistory(FILE * fp)
+{
+    char * history = "history.txt";
+    if (fopen(fp, history, "a+") != NULL)
+    {
+        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            history[i] = malloc(sizeof(buffer + 1));
+            strcpy(history[i], buffer);
+            i++;
+        }
+    }
+
+    for (int i = 0; i < ) {
+
+    }
+>>>>>>> origin/master
 }
 
 void readhistory(char ** history, char * args)
@@ -43,6 +61,7 @@ void readhistory(char ** history, char * args)
         free(history);
         freopen();
     }
+<<<<<<< HEAD
 }
 
 int addhistory(char * input, FILE * fp, char ** history, int i)
@@ -58,4 +77,6 @@ int addhistory(char * input, FILE * fp, char ** history, int i)
     i++;
 
     return i;
+=======
+>>>>>>> origin/master
 }
