@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <ctype.h>
-#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <limits.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 // ANSI color formatting for a fun shell experience :)
@@ -30,11 +29,6 @@ typedef struct user {
     char * dir;
 } user_t;
 
-typedef struct commands {
-    char * command;
-    int pid;
-} commands;
-
 // Global variables
 int histindex = 0;
 int pidsize = 0;
@@ -47,8 +41,7 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
                         char ** history, int histindex, FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
-void repeat(char ** args, int * pidarr, user_t user, int i);
-dalek(pid_t pid, pid_t * pidarr, long pidsize);
+int dalek(pid_t pid, pid_t * pidarr, long pidsize);
 void echo(char ** argv);
 void exterminate(int * pid);
 char ** inithistory(FILE * fp);
@@ -57,6 +50,7 @@ char ** parser(char * input);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
 void bye(FILE * fp);
+int exists(char * args);
 
 
 // Initialize shell function
@@ -97,7 +91,7 @@ user_t initshell(user_t user)
     return user;
 }
 
-char ** replay(char ** args, char ** history, int index) {
+char ** replay(char ** args, char ** history, int * pid) {
     // It should be that replay isn't stored in the history command but 
     // choosing to go into an infinite loop isn't any of my business.
     int len = strlen(args[1]);
@@ -107,9 +101,13 @@ char ** replay(char ** args, char ** history, int index) {
             return NULL;
         }
     
+    // Remove replay from history array
+    free(history[histindex - 1]);
+    histindex--;
+
     int num = atoi(args[1]);
-    if (num > 0 && num < index)
-        return parser(history[num]);
+    if (num > 0 && num < histindex)
+        return parser(history[histindex - num - 1]);
     else 
         fprintf(stderr, RED "ERROR " RESET "mysh: number out of range\n");    
 
@@ -137,8 +135,20 @@ char ** inithistory(FILE * fp) {
 
 FILE * readhistory(char ** argv, char ** history, FILE * fp)
 {
-    // reopen file
-    if (!strcmp(argv[1], "-c")) {
+    // If there's no command just print out the full history
+    if (argv[1] == NULL) {
+        char * buffer = NULL;
+        // Have the numbers be opposite the actual index in the array.
+        for (int i = histindex - 1; i >= 0; i--) {
+            fgets(buffer, MAXLETTERS, fp);
+            fprintf(stdout, "%d %s\n", (i - histindex - 1), buffer);
+        }
+        free(buffer);
+    }
+
+    // When you clear the history, you can easily remove everything in the file
+    // by reopening it.
+    else if (!strcmp(argv[1], "-c")) {
         // I checked to make sure this doesn't lose any of the history commands.
         // It shouldn't, but sometimes it did.
         for (int i = 0; i < histindex; i++)
@@ -187,10 +197,15 @@ void help() {
     "\nclear"
     "\nbyebye"
     "\nreplay <number>"
+    "\ndwelt <file or directory>"
     "\nstart <program> [parameters]"
     "\nbackground <program> [parameters]"
     "\ndalek <PID>"
-    "\nrepeat n command ...");
+    "\ndalekall"
+    "\nmaik <file>"
+    "\nmaikdir <directory>"
+    "\ncoppy <file1> <file2>"
+    "\nrepeat n <command> ...");
     return;
 }
 
@@ -380,22 +395,6 @@ int background(char ** args, int * pidarr, user_t user, int i)
     return i;
 }
 
-void repeat(char ** args, int * pidarr, user_t user, int i) {
-    int num;
-    char ** tmp = args;
-    if (!(num = atoi(args[0])))
-    {
-        fprintf(stderr, "mysh: first argument must be a number\n");
-        return;
-    }
-    tmp++;
-    while (num > 0) {
-        i = background(tmp, pidarr, user, i);
-        num++;
-    }
-    return;
-}
-
 int dalek(pid_t pid, pid_t * pidarr, long pidsize) {
     // There should be some sort of logic to check if the pid is negative so 
     // you don't do kill -1.
@@ -435,13 +434,12 @@ void echo(char ** argv) {
     // }
 }
 
-void exterminate(int * pid) {
+void dalekall(int * pid) {
     // This *should* work. 
-    int size = sizeof(pid) / sizeof(int);
     // Go through all pids and delete them, 
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i < pidsize; i++)
         if (pid[i] > 0)
-            dalek(pid[i], pid);
+            dalek(pid[i], pid, pidsize);
 
     return;
 }
@@ -467,12 +465,35 @@ int copy(char ** args) {
         return 0;
     }
 
+    if (!access(args[1], F_OK)) {
+        fprintf(stderr, RED "ERROR: " RESET "file %s already exists\n", args[1]);
+        return 0;
+    }
+
     char c;
     while ((c = fgetc(source)) != EOF)
         fputc(c, destination);
 
     fclose(source);
     fclose(destination);
+    return 1;
+}
+
+int rm(char * file, user_t user)
+{
+    FILE * fp;
+    char * buf = (char *)malloc(MAXLETTERS * sizeof(char));
+    // strcpy(user.dir, buf);
+    realpath(file, buf);
+    // Check if the file exists
+    if (!(fp = fopen(buf, "r+"))) {
+        fprintf(stderr, RED "ERROR:" RESET "mysh: file cannot be accessed.\n");
+        fprintf(stderr, "Check if you have write access in this directory.\n");
+        return 0;
+    }
+    else {
+    remove(file);
+    }
     return 1;
 }
 
@@ -488,13 +509,51 @@ int make(char * filename) {
     return 1;
 }
 
+int makedir(char * dirname) {
+    struct stat s = {0};
+    if (stat(dirname, &s) == -1 || S_ISREG(s.st_mode)) {
+        mkdir(dirname, 0777);
+        return 1;
+    }
+    else {
+        fprintf(stderr, RED "ERROR " RESET "mysh: cannot create directory\n");
+    }
+}
+
+int exists(char * args)
+{
+    char * buffer = (char *)malloc(sizeof(char) * MAXLETTERS);
+    struct stat s;
+    // Return 2 if it is a directory
+    if (stat(realpath(args, buffer), &s) == 0 && S_ISDIR(s.st_mode)) {
+        fprintf(stdout, "Abode is.\n");
+        free(buffer);
+        return 2;
+    }
+    // Return 1 if it is a file
+    else if (stat(realpath(args, buffer), &s) == 0 && S_ISREG(s.st_mode)) {
+        fprintf(stdout, "Dwelt is.\n");
+        free(buffer);
+        return 1;
+    }
+    // Return 0 if it doesn't exist
+    else {
+        fprintf(stdout, "Dwelt not.\n");
+        free(buffer);
+        return 0;
+    }
+}
+
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
                         char ** history, int histindex, FILE * fp) {
     char ** tmp = argv;
     
     if (!strcmp(argv[0], "whereami"))
-            cwd(user);  
+        cwd(user);  
     
+    else if (!strcmp(argv[0], "help"))
+        help();
+
     else if (!strcmp(argv[0], "start")) {
         // I moved the pointer of the struct so that it wouldn't be 
         // included in the function call.
@@ -527,23 +586,16 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         tmp = NULL;
     }
 
-    else if (!strcmp(argv[0], "repeat")) {
-        tmp++;
-        repeat(argv, pid, user, histindex);
-        tmp = NULL;
-    }
-
     else if (!strcmp(argv[0], "history")) {
         fp = readhistory(argv, history, fp);
     }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
     else if (!strcmp(argv[0], "maik")) {
         make(argv[1]);
+    }
+
+    else if (!strcmp(argv[0], "maikdir")) {
+        makedir(argv[1]);
     }
 
     else if (!strcmp(argv[0], "coppy")) {
@@ -552,7 +604,10 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         tmp = NULL;
     }
 
->>>>>>> Stashed changes
+    else if (!strcmp(argv[0], "dwelt")) {
+        exists(argv[1]);
+    }
+
     else if (!strcmp(argv[0], "movetodir"))
         user = cd(argv, user);
 
@@ -583,7 +638,7 @@ int main() {
 
         // If you put this at the top it still has 
         if (!strcmp(argv[0], "replay")) {
-            argv = replay(argv, history, histindex);
+            argv = replay(argv, history, pid);
             builtin(input, argv, user, pid, history, histindex, fp);
         }
 
