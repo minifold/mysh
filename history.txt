@@ -1,0 +1,10 @@
+hello world
+start cal
+start ls
+background date
+byebye
+maik hello.txt
+start ls
+byebye
+byebye
+byebye

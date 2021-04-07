@@ -56,7 +56,7 @@ user_t initshell(user_t user);
 char ** parser(char * input);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
-void bye(user_t user, FILE * fp);
+void bye(FILE * fp);
 
 
 // Initialize shell function
@@ -116,15 +116,15 @@ char ** replay(char ** args, char ** history, int index) {
 }
 
 char ** inithistory(FILE * fp) {
-    long size = MAXLETTERS;
-    char ** history = (char **)malloc(size * sizeof(char *)); 
+    MAXHISTSIZE = MAXLETTERS;
+    char ** history = (char **)malloc(MAXHISTSIZE * sizeof(char *)); 
     char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
 
     if (fp != NULL) {
         while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-            if (histindex >= size) {
-                size += MAXLETTERS;
-                history = (char **)realloc(history, size * sizeof(char *));
+            if (histindex >= MAXHISTSIZE) {
+                MAXHISTSIZE += MAXLETTERS;
+                history = (char **)realloc(history, MAXHISTSIZE * sizeof(char *));
             } 
             history[histindex] = malloc(sizeof(buffer));
             strcpy(history[histindex], buffer);
@@ -446,12 +446,34 @@ void exterminate(int * pid) {
     return;
 }
 
-void bye(user_t user, FILE * fp) {
+void bye(FILE * fp) {
     // I was under the impression I would have to free the user struct pointers
     // after I was done with them, but when I did so I got an error.
     fclose(fp);
     clear();
     return;
+}
+
+int copy(char ** args) {
+    
+    if (args[0] == NULL || args[1] == NULL) {
+        fprintf(stderr, RED "ERROR: " RESET "mysh: incorrect number of arguments\n");
+        return 0;
+    }
+
+    FILE * source, * destination;
+    if (!(source = fopen(args[0], "r+")) || !(destination = fopen(args[1], "w+"))) {
+        fprintf(stderr, RED "ERROR:" RESET "mysh: unable to open file\n");
+        return 0;
+    }
+
+    char c;
+    while ((c = fgetc(source)) != EOF)
+        fputc(c, destination);
+
+    fclose(source);
+    fclose(destination);
+    return 1;
 }
 
 int make(char * filename) {
@@ -515,6 +537,22 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         fp = readhistory(argv, history, fp);
     }
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+=======
+>>>>>>> Stashed changes
+    else if (!strcmp(argv[0], "maik")) {
+        make(argv[1]);
+    }
+
+    else if (!strcmp(argv[0], "coppy")) {
+        tmp++;
+        copy(tmp);
+        tmp = NULL;
+    }
+
+>>>>>>> Stashed changes
     else if (!strcmp(argv[0], "movetodir"))
         user = cd(argv, user);
 
@@ -550,7 +588,7 @@ int main() {
         }
 
         else if (!strcmp(argv[0], "byebye") || !strcmp(argv[0], "^C")) {
-            bye(user, fp);
+            bye(fp);
             break;
         }
 
