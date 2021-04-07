@@ -1,2 +1,7 @@
+byebye
 history
-
+history -c
+byebye
+clear
+history 2
+history

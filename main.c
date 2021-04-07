@@ -39,18 +39,22 @@ char ** addtohistory(FILE * fp, char ** history, char * args);
 int background(char ** args, int * pidarr, user_t user, int i);
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
                         char ** history, int histindex, FILE * fp);
+void bye(FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
+int copy (char ** args);
 int dalek(pid_t pid, pid_t * pidarr, long pidsize);
+void dalekall(int * pid);
 void echo(char ** argv);
-void exterminate(int * pid);
+int exists(char * args);
 char ** inithistory(FILE * fp);
 user_t initshell(user_t user);
+int make(char * filename);
+int makedir(char * dirname);
 char ** parser(char * input);
+int repeat(char ** args, int * pidarr, user_t user, int i);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
-void bye(FILE * fp);
-int exists(char * args);
 
 
 // Initialize shell function
@@ -119,13 +123,14 @@ char ** inithistory(FILE * fp) {
     char * buffer = (char *)malloc(MAXLETTERS * sizeof(char));
 
     if (fp != NULL) {
-        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        while (fgets(buffer, MAXLETTERS, fp) != NULL) {
             if (histindex >= MAXHISTSIZE) {
                 MAXHISTSIZE += MAXLETTERS;
                 history = (char **)realloc(history, MAXHISTSIZE * sizeof(char *));
             } 
             history[histindex] = malloc(sizeof(buffer));
             strcpy(history[histindex], buffer);
+            memset(buffer, 0, strlen(buffer));
             histindex++;
         }
     }
@@ -135,16 +140,14 @@ char ** inithistory(FILE * fp) {
 
 FILE * readhistory(char ** argv, char ** history, FILE * fp)
 {
+    char * ptr;
+    long i;
     // If there's no command just print out the full history
-    if (argv[1] == NULL) {
-        char * buffer = NULL;
+    if (argv[1] == NULL)
         // Have the numbers be opposite the actual index in the array.
         for (int i = histindex - 1; i >= 0; i--) {
-            fgets(buffer, MAXLETTERS, fp);
-            fprintf(stdout, "%d %s\n", (i - histindex - 1), buffer);
+            fprintf(stdout, "%d %s", (histindex - i), history[i]);
         }
-        free(buffer);
-    }
 
     // When you clear the history, you can easily remove everything in the file
     // by reopening it.
@@ -160,23 +163,36 @@ FILE * readhistory(char ** argv, char ** history, FILE * fp)
         histindex = 0;    
     }
 
+    // Check if the number converts into a long integer
+    else if ((i = strtol(argv[1], &ptr, 10)) != 0) {
+
+        if ( i > histindex || i < 0) {
+            fprintf(stderr, "mysh: %ld out of bounds\n", i);
+        }
+
+        else {
+            // Print the history line at that point
+            fprintf(stdout, "%ld %s", i, history[i]);
+        }
+    }
+
     return fp;
 }
 
 char ** addtohistory(FILE * fp, char ** history, char * args) {
     // Print to file
     // Check if history is openable
-    if (!(fp = fopen("history.txt", "w"))) {
-        printf("mysh: error opening history file.\n");
+    if (!(fp = fopen("history.txt", "a+"))) {
+        fprintf(stderr, "mysh: error opening history file.\n");
         return history;
     }
 
-    fprintf(fp, "%s\n", args);
+    fprintf(fp, "%s", args);
     if (histindex < MAXHISTSIZE) {
         history[histindex++] = strdup(args);
     } 
     // After some time simply delete the most recent history commands and 
-    // replace them.
+    // replace them to save some space.
     else {
         free(history[0]);
         for (unsigned i = 1; i < MAXHISTSIZE; i++) {
@@ -406,14 +422,12 @@ int dalek(pid_t pid, pid_t * pidarr, long pidsize) {
         if (pidarr[i] == pid)
             exists = 1;
     
-    if (exists == 0)
-    {
+    if (exists == 0) {
         fprintf(stderr, RED "ERROR " RESET "mysh : pid does not exist.\n");
         return -1;
     }
 
-    if (kill(pid, SIGKILL) == -1)
-    {
+    if (kill(pid, SIGKILL) == -1) {
         fprintf(stderr, RED "ERROR " RESET "mysh : Error killing process.\n");
         return -1;
     }
@@ -459,14 +473,14 @@ int copy(char ** args) {
         return 0;
     }
 
-    FILE * source, * destination;
-    if (!(source = fopen(args[0], "r+")) || !(destination = fopen(args[1], "w+"))) {
-        fprintf(stderr, RED "ERROR:" RESET "mysh: unable to open file\n");
+    if (!access(args[1], F_OK)) {
+        fprintf(stderr, RED "ERROR: " RESET "file %s already exists\n", args[1]);
         return 0;
     }
 
-    if (!access(args[1], F_OK)) {
-        fprintf(stderr, RED "ERROR: " RESET "file %s already exists\n", args[1]);
+    FILE * source, * destination;
+    if (!(source = fopen(args[0], "r+")) || !(destination = fopen(args[1], "w+"))) {
+        fprintf(stderr, RED "ERROR:" RESET "mysh: unable to open file\n");
         return 0;
     }
 
@@ -492,7 +506,7 @@ int rm(char * file, user_t user)
         return 0;
     }
     else {
-    remove(file);
+        remove(file);
     }
     return 1;
 }
@@ -542,6 +556,21 @@ int exists(char * args)
         free(buffer);
         return 0;
     }
+}
+
+int repeat(char ** args, int * pidarr, user_t user, int i) {
+    int num;
+    char ** tmp = args;
+    if (!(num = atoi(args[0]))) {
+        fprintf(stderr, "mysh: first argument must be a number\n");
+        return 0;
+    }
+    tmp++;
+    while (num > 0) {
+        i = background(tmp, pidarr, user, i);
+        num++;
+    }
+    return 1;
 }
 
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
