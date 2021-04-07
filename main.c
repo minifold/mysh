@@ -617,7 +617,7 @@ int copydir(char * source, char * destination) {
                 }
                 else if (isfile(path))
                 {
-                    printf()
+                    // printf();
                     // copy file. The only issue is the copy program 
                     outpath = strdup(destination);
                     strcat(outpath, "/");
