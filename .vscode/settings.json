@@ -3,5 +3,9 @@
         "MAXCOMMS",
         "addtohistory",
         "usercomms"
-    ]
+    ],
+    "files.associations": {
+        "*.tcc": "c",
+        "string": "c"
+    }
 }

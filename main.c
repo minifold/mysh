@@ -1,9 +1,9 @@
-#include <stdio.h>
 #include <ctype.h>
+#include <dirent.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <dirent.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -20,6 +20,7 @@
 // and initializations.
 #define MAXLETTERS 4024
 #define SIGKILL 9
+#define DECIMAL 10
 // Clear function
 #define clear() fprintf(stdout, "\033[H\033[J") 
 
@@ -42,13 +43,15 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 void bye(FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
-int copy (char ** args);
+int copy (char * source, char * destination);
 int dalek(pid_t pid, pid_t * pidarr, long pidsize);
 void dalekall(int * pid);
 void echo(char ** argv);
 int exists(char * args);
 char ** inithistory(FILE * fp);
 user_t initshell(user_t user);
+int isdir(const char * path);
+int isfile(const char * path);
 int make(char * filename);
 int makedir(char * dirname);
 char ** parser(char * input);
@@ -98,20 +101,19 @@ user_t initshell(user_t user)
 char ** replay(char ** args, char ** history, int * pid) {
     // It should be that replay isn't stored in the history command but 
     // choosing to go into an infinite loop isn't any of my business.
-    int len = strlen(args[1]);
-    for (int i = 0;  i < len - 1; i++)
-        if (!isdigit(args[1][i])) {
-            fprintf(stderr, RED "ERROR " RESET "mysh: %s not a number\n", args[1]);
-            return NULL;
-        }
+    char * ptr;
+    long len;
+    if (!(len = strtol(args[1], &ptr, DECIMAL))) {
+        fprintf(stderr, RED "ERROR " RESET "mysh: %s not a number\n", args[1]);
+        return NULL;
+    }
     
     // Remove replay from history array
     free(history[histindex - 1]);
     histindex--;
 
-    int num = atoi(args[1]);
-    if (num > 0 && num < histindex)
-        return parser(history[histindex - num - 1]);
+    if (len > 0 && len < histindex)
+        return parser(history[histindex - len - 1]);
     else 
         fprintf(stderr, RED "ERROR " RESET "mysh: number out of range\n");    
 
@@ -164,7 +166,7 @@ FILE * readhistory(char ** argv, char ** history, FILE * fp)
     }
 
     // Check if the number converts into a long integer
-    else if ((i = strtol(argv[1], &ptr, 10)) != 0) {
+    else if ((i = strtol(argv[1], &ptr, DECIMAL)) != 0) {
 
         if ( i > histindex || i < 0) {
             fprintf(stderr, "mysh: %ld out of bounds\n", i);
@@ -324,7 +326,6 @@ user_t cd(char ** args, user_t user) {
         }
 
         strcpy(user.dir, buffer);
-        // printf("%s\n", buffer);
     }
 
     free(buffer);
@@ -466,30 +467,30 @@ void bye(FILE * fp) {
     return;
 }
 
-int copy(char ** args) {
+int copy(char * source, char * destination) {
     
-    if (args[0] == NULL || args[1] == NULL) {
-        fprintf(stderr, RED "ERROR: " RESET "mysh: incorrect number of arguments\n");
+    if (source == NULL || destination == NULL) {
+        fprintf(stderr, RED "ERROR " RESET "mysh: incorrect number of arguments\n");
         return 0;
     }
 
-    if (!access(args[1], F_OK)) {
-        fprintf(stderr, RED "ERROR: " RESET "file %s already exists\n", args[1]);
+    if (!access(destination, F_OK)) {
+        fprintf(stderr, RED "ERROR " RESET "file %s already exists\n", destination);
         return 0;
     }
 
-    FILE * source, * destination;
-    if (!(source = fopen(args[0], "r+")) || !(destination = fopen(args[1], "w+"))) {
-        fprintf(stderr, RED "ERROR:" RESET "mysh: unable to open file\n");
+    FILE * src, * dest;
+    if (!(src = fopen(source, "r+")) || !(dest = fopen(destination, "w+"))) {
+        fprintf(stderr, RED "ERROR " RESET "mysh: unable to open file\n");
         return 0;
     }
 
     char c;
-    while ((c = fgetc(source)) != EOF)
-        fputc(c, destination);
+    while ((c = fgetc(src)) != EOF)
+        fputc(c, dest);
 
-    fclose(source);
-    fclose(destination);
+    fclose(src);
+    fclose(dest);
     return 1;
 }
 
@@ -497,7 +498,7 @@ int rm(char * file, user_t user)
 {
     FILE * fp;
     char * buf = (char *)malloc(MAXLETTERS * sizeof(char));
-    // strcpy(user.dir, buf);
+
     realpath(file, buf);
     // Check if the file exists
     if (!(fp = fopen(buf, "r+"))) {
@@ -524,7 +525,7 @@ int make(char * filename) {
 }
 
 int makedir(char * dirname) {
-    struct stat s = {0};
+    struct stat s;
     if (stat(dirname, &s) == -1 || S_ISREG(s.st_mode)) {
         mkdir(dirname, 0777);
         return 1;
@@ -534,27 +535,100 @@ int makedir(char * dirname) {
     }
 }
 
-int exists(char * args)
-{
-    char * buffer = (char *)malloc(sizeof(char) * MAXLETTERS);
+int isdir(const char * path) {
     struct stat s;
+    char * buffer = (char *)malloc(sizeof(char) * MAXLETTERS);
+    stat(realpath(path, buffer), &s);
+    free(buffer);
+    return S_ISDIR(s.st_mode);
+}
+
+int isfile(const char * path) {
+    struct stat s;
+    char * buffer = (char *)malloc(sizeof(char) * MAXLETTERS);
+    stat(realpath(path, buffer), &s);
+    free(buffer);
+    return S_ISREG(s.st_mode); 
+}
+
+int exists(char * args) {
     // Return 2 if it is a directory
-    if (stat(realpath(args, buffer), &s) == 0 && S_ISDIR(s.st_mode)) {
+    if (isdir(args)) {
         fprintf(stdout, "Abode is.\n");
-        free(buffer);
         return 2;
     }
     // Return 1 if it is a file
-    else if (stat(realpath(args, buffer), &s) == 0 && S_ISREG(s.st_mode)) {
+    else if (isfile(args)) {
         fprintf(stdout, "Dwelt is.\n");
-        free(buffer);
         return 1;
     }
     // Return 0 if it doesn't exist
     else {
         fprintf(stdout, "Dwelt not.\n");
-        free(buffer);
         return 0;
+    }
+}
+
+// void list(char ** args) {
+//     struct dirent dir;
+//     DIR *pdir;
+//     struct stat s;
+    
+//     pdir 
+//     return;
+// }
+
+int copydir(char * source, char * destination) {
+    DIR * dir;
+    struct dirent *entry;
+    struct stat s;
+
+    if (source == NULL || destination == NULL) {
+        fprintf(stderr, RED "ERROR " RESET "mysh: not enough arguments\n");
+        return 0;
+    }
+
+    char * buffer = (char *)malloc(sizeof(char) * MAXLETTERS);
+    char * path, *outpath;
+
+    stat(realpath(source, buffer), &s);
+    if (!isdir(source)){
+        fprintf(stderr, "mysh: source is not a directory\n");
+        return 0;
+    }
+
+    if((dir = opendir(source))) {
+        while(entry = readdir(dir)) {
+            if(strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
+                
+                path = strdup(source);
+                strcat(path, "/");
+                strcat(path, entry->d_name);
+
+                if (isdir(path)) {
+                    printf("%s\n", path);
+                    // Create Folder on the destination path
+                    outpath = strdup(destination);
+                    strcat(outpath, "/");
+                    strcat(outpath, entry->d_name);
+                    makedir(outpath);
+
+                    copydir(path, outpath);
+                }
+                else if (isfile(path))
+                {
+                    printf()
+                    // copy file. The only issue is the copy program 
+                    outpath = strdup(destination);
+                    strcat(outpath, "/");
+                    if (!isdir(outpath))
+                        makedir(outpath);
+                    strcat(outpath, path);
+                    copy(path, outpath);
+                }
+            }
+        }
+        closedir(dir);
     }
 }
 
@@ -599,7 +673,7 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         if (argv[1] == NULL)
             fprintf(stderr, RED "ERROR " RESET "mysh : argument required for dalek\n");
         
-        dalek(strtol(argv[1], ptr, 10), pid, pidsize);
+        dalek(strtol(argv[1], ptr, DECIMAL), pid, pidsize);
         pid[histindex] = 0;
     }
         
@@ -629,7 +703,13 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 
     else if (!strcmp(argv[0], "coppy")) {
         tmp++;
-        copy(tmp);
+        copy(tmp[0], tmp[1]);
+        tmp = NULL;
+    }
+
+    else if (!strcmp(argv[0], "coppyabode")) {
+        tmp++;
+        copydir(tmp[0], tmp[1]);
         tmp = NULL;
     }
 
@@ -655,6 +735,7 @@ int main() {
 
     while(1)
     {
+        setbuf(stdout, NULL);
         prompt(user);
         // process whatever is in the buffer
         fflush(stdin);
@@ -681,6 +762,7 @@ int main() {
 
         free(input);
         free(argv);
+        fflush(stdout);
     }
 
     return 0;

@@ -5,3 +5,18 @@ byebye
 clear
 history 2
 history
+byebye
+start ls
+hello world
+byebye
+start ls
+byebye
+start ls
+byebye
+start date
+byebye
+start date
+byebye
+background cal
+start ls
+start dir
