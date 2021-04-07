@@ -21,7 +21,7 @@
 #define MAXLETTERS 4024
 #define SIGKILL 9
 // Clear function
-#define clear() printf("\033[H\033[J") 
+#define clear() fprintf(stdout, "\033[H\033[J") 
 
 typedef struct user {
     char * username;
