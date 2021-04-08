@@ -1,38 +1,30 @@
 byebye
 history
 history -c
-byebye
-clear
-history 2
 history
-byebye
+replay 2
 start ls
-hello world
-byebye
-start ls
-byebye
-start ls
-byebye
-start date
-byebye
-start date
-byebye
-background cal
-start ls
-start dir
-byebye
-hello world
-background cal
-byebye
-clear
+dalek
+dwelt old
 dwelt main.c
 byebye
-maikdir old
-maikdir test
+repeat 3 history
 byebye
-clear
-ls
-movetodir old
+byebye
+repeat 3 history
+byebye
+repeat 2 history
+byebye
 start ls
-maikdir test2
-maikdir old
+dalek 12406
+background cal
+start ls
+movetodir ~
+movetodir ..
+whereami
+help
+clear
+dalekall
+repeat 2 cal
+byebye
+byebye
