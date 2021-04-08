@@ -135,7 +135,6 @@ char ** inithistory(FILE * fp) {
                 history = (char **)realloc(history, MAXHISTSIZE * sizeof(char *));
             } 
             history[histindex] = malloc(sizeof(buffer));
-            strcpy(history[histindex], buffer);
             memset(buffer, 0, strlen(buffer));
             histindex++;
         }
@@ -846,13 +845,17 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 void bye(user_t user, char ** history, char * input, char ** argv, FILE * fp) {
     // Cleanup crew
     fclose(fp);
+    // User struct
     free(user.dir);
     free(user.host);
+    // Input strings
     free(input);
     free(argv);
+    // History
     for (int i = 0; i < histindex; i++)
         free(history[i]);
     free(history);
+
     fflush(stdout);
     clear();
     return;
