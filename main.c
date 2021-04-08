@@ -407,12 +407,13 @@ int start(char ** args, user_t user) {
     if (pid < 0)
         fprintf(stderr, RED "ERROR" RESET "mysh: process forking failed\n");
     
-    if (pid == 0)
+    if (pid == 0) {
         if (execvp(args[0], args) == -1) {
             fprintf(stderr, RED "ERROR " RESET "mysh : program exec failure\n");
             return -1; 
         }
-    
+    }
+
     else {
         waitpid(pid, &status, 0);
     }
