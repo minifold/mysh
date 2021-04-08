@@ -748,6 +748,7 @@ int repeat(char ** args, int * pidarr, user_t user) {
 
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
                         char ** history, int histindex, FILE * fp) {
+    
     char ** tmp = argv;
     
     if (!strcmp(argv[0], "whereami"))
@@ -833,6 +834,13 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 
     else if (!strcmp(argv[0], "delet")) {
         rm(argv[1], user);
+    }
+
+    else if (!strcmp(argv[0], "maik"))
+    {
+        tmp++;
+        make(argv, user);
+        tmp = NULL;
     }
 
     else if (!strcmp(argv[0], "movetodir"))

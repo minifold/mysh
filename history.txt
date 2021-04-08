@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 byebye
 history
 history -c
@@ -54,3 +55,15 @@ byebye
 bbyebye
 byebye
 hello world
+=======
+hello world
+
+start cal
+
+start ls
+
+background date
+
+byebye
+
+>>>>>>> master
