@@ -32,10 +32,9 @@ int addhistory(char * input, FILE * fp, char ** history, int i)
         history = (char **)realloc(history, size * sizeof(char *));
     }
 
-    history[i] = (char *)realloc(history[i], sizeof(input));
-    strcpy(history[i], input);
+    history[i] = strdup(input);
     fprintf(fp, "%s", input);
-    i++;
+    histindex++;
 
     return i;
 }

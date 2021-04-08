@@ -1,0 +1,13 @@
+byebye
+delet hello.txt
+delet goodbye.txt
+delet goodmorning.txt
+list
+history
+history -c
+history
+byebye
+history
+byebye
+clear
+history
