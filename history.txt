@@ -20,3 +20,19 @@ byebye
 background cal
 start ls
 start dir
+byebye
+hello world
+background cal
+byebye
+clear
+dwelt main.c
+byebye
+maikdir old
+maikdir test
+byebye
+clear
+ls
+movetodir old
+start ls
+maikdir test2
+maikdir old

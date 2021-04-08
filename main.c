@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -43,18 +44,21 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 void bye(FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
-int copy (char * source, char * destination);
+int copy(char * source, char * destination, user_t user);
+int copydir(char * source, char * destination, user_t user);
 int dalek(pid_t pid, pid_t * pidarr, long pidsize);
 void dalekall(int * pid);
 void echo(char ** argv);
-int exists(char * args);
+int exists(char * args, user_t user);
 char ** inithistory(FILE * fp);
 user_t initshell(user_t user);
 int isdir(const char * path);
 int isfile(const char * path);
 int make(char * filename);
-int makedir(char * dirname);
+int makedir(char * dirname, user_t user);
 char ** parser(char * input);
+void recursivecopydir(char * source, char * destination, DIR * dir, 
+                      struct dirent * entry, struct stat s, user_t user);
 int repeat(char ** args, int * pidarr, user_t user, int i);
 char * pathcheck(char * path, user_t user);
 int start(char ** args, user_t user);
@@ -359,6 +363,26 @@ void prompt(user_t user)
     return;
 }
 
+char * pathcheck(char * path, user_t user) {
+    int size = MAXLETTERS;
+    // Check if the path is absolute or needs to be rewritten as local
+    // in a way that can be read by the shell.
+    if (path[0] != '/') {
+        char * newpath = (char *)malloc(sizeof(char) * size);
+        // Just to make sure that the size of newpath is never smaller than 
+        // the directory.
+        if (strlen(user.dir) > MAXLETTERS) {
+            size += MAXLETTERS;
+            newpath = realloc(newpath, sizeof(char) * size);
+        }
+        // Place the path on the shell's current directory path.
+        strcpy(newpath, user.dir);
+        strcat(newpath, path);
+        return newpath;
+    }
+    return path;
+}
+
 int start(char ** args, user_t user) {
     // Fork the current process, then change the child process to the 
     // program you want to run.
@@ -398,12 +422,19 @@ int background(char ** args, int * pidarr, user_t user, int i)
     if (pid < 0) 
         fprintf(stderr, RED "ERROR " RESET "mysh : process forking failed\n");
     
-    if (pid == 0)
+    
+    if (pid == 0) {
+        // Keeps the background process from showing up on on the screen.
+        int empty = open("/dev/null", O_WRONLY | O_CREAT, 0666);
+        dup2(empty, STDOUT_FILENO);
+        dup2(empty, STDERR_FILENO);
+        
         if (execvp(args[0], args) == -1){
             fprintf(stderr, RED "ERROR " RESET "mysh : program exec failure\n");
             return -1;
         }
-       
+        close(empty);
+    }
     // Add pid to the pid table.
     pidarr[i] = pid;
     // Increment the history counter.
@@ -439,16 +470,6 @@ int dalek(pid_t pid, pid_t * pidarr, long pidsize) {
     return 0;
 }
 
-void echo(char ** argv) {
-    // int i = 0;
-    // char strings[2] = { '"', ''' };
-    // if (!strcmp(argv[i][0], '"')) {
-    //    while (!strrchr(argv[i], '"'))
-    //        fprintf(stdout, "%s ", argv[i]);
-    //    fprintf(stdout, "\n");
-    // }
-}
-
 void dalekall(int * pid) {
     // This *should* work. 
     // Go through all pids and delete them, 
@@ -467,12 +488,15 @@ void bye(FILE * fp) {
     return;
 }
 
-int copy(char * source, char * destination) {
+int copy(char * source, char * destination, user_t user) {
     
     if (source == NULL || destination == NULL) {
         fprintf(stderr, RED "ERROR " RESET "mysh: incorrect number of arguments\n");
         return 0;
     }
+
+    source = pathcheck(source, user);
+    destination = pathcheck(destination, user);
 
     if (!access(destination, F_OK)) {
         fprintf(stderr, RED "ERROR " RESET "file %s already exists\n", destination);
@@ -524,14 +548,20 @@ int make(char * filename) {
     return 1;
 }
 
-int makedir(char * dirname) {
+int makedir(char * dirname, user_t user) {
+    dirname = pathcheck(dirname, user);
     struct stat s;
     if (stat(dirname, &s) == -1 || S_ISREG(s.st_mode)) {
         mkdir(dirname, 0777);
         return 1;
     }
+    else if (S_ISDIR(s.st_mode)) {
+        fprintf(stderr, RED "ERROR " RESET "mysh: directory already exists.\n");
+        return 0;
+    }
     else {
         fprintf(stderr, RED "ERROR " RESET "mysh: cannot create directory\n");
+        return 0;
     }
 }
 
@@ -551,15 +581,15 @@ int isfile(const char * path) {
     return S_ISREG(s.st_mode); 
 }
 
-int exists(char * args) {
+int exists(char * args, user_t user) {
     // Return 2 if it is a directory
-    if (isdir(args)) {
+    if (isdir(pathcheck(args, user))) {
         fprintf(stdout, "Abode is.\n");
         return 2;
     }
     // Return 1 if it is a file
-    else if (isfile(args)) {
-        fprintf(stdout, "Dwelt is.\n");
+    else if (isfile(pathcheck(args, user))) {
+        fprintf(stdout, "Dwelt indeed.\n");
         return 1;
     }
     // Return 0 if it doesn't exist
@@ -578,7 +608,7 @@ int exists(char * args) {
 //     return;
 // }
 
-int copydir(char * source, char * destination) {
+int copydir(char * source, char * destination, user_t user) {
     DIR * dir;
     struct dirent *entry;
     struct stat s;
@@ -588,14 +618,26 @@ int copydir(char * source, char * destination) {
         return 0;
     }
 
+    source = pathcheck(source, user);
+    destination = pathcheck(destination, user);
+
     char * buffer = (char *)malloc(sizeof(char) * MAXLETTERS);
-    char * path, *outpath;
 
     stat(realpath(source, buffer), &s);
     if (!isdir(source)){
         fprintf(stderr, "mysh: source is not a directory\n");
         return 0;
     }
+
+    recursivecopydir(source, destination, dir, entry, s, user);
+    free(buffer);
+    return 1;
+}
+
+void recursivecopydir(char * source, char * destination, DIR * dir, 
+                      struct dirent * entry, struct stat s, user_t user) {
+
+    char * path, *outpath;
 
     if((dir = opendir(source))) {
         while(entry = readdir(dir)) {
@@ -611,26 +653,31 @@ int copydir(char * source, char * destination) {
                     outpath = strdup(destination);
                     strcat(outpath, "/");
                     strcat(outpath, entry->d_name);
-                    makedir(outpath);
+                    makedir(outpath, user);
 
-                    copydir(path, outpath);
+                    recursivecopydir(path, outpath, dir, entry, s, user);
                 }
                 else if (isfile(path))
                 {
-                    // printf();
-                    // copy file. The only issue is the copy program 
+                    // copy file. The only issue is when recursively copying, 
+                    // one must make sure that the directory exists.
                     outpath = strdup(destination);
                     strcat(outpath, "/");
                     if (!isdir(outpath))
-                        makedir(outpath);
+                        makedir(outpath, user);
                     strcat(outpath, path);
-                    copy(path, outpath);
+                    copy(path, outpath, user);
                 }
             }
         }
         closedir(dir);
     }
 }
+
+void echo(char ** argv) {
+    return;
+}
+
 
 int repeat(char ** args, int * pidarr, user_t user, int i) {
     int num;
@@ -670,9 +717,10 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         
     else if (!strcmp(argv[0], "dalek")) {
         char ** ptr = NULL;
-        if (argv[1] == NULL)
+        if (argv[1] == NULL) {
             fprintf(stderr, RED "ERROR " RESET "mysh : argument required for dalek\n");
-        
+            return;
+        }
         dalek(strtol(argv[1], ptr, DECIMAL), pid, pidsize);
         pid[histindex] = 0;
     }
@@ -698,23 +746,23 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
     }
 
     else if (!strcmp(argv[0], "maikdir")) {
-        makedir(argv[1]);
+        makedir(argv[1], user);
     }
 
     else if (!strcmp(argv[0], "coppy")) {
         tmp++;
-        copy(tmp[0], tmp[1]);
+        copy(tmp[0], tmp[1], user);
         tmp = NULL;
     }
 
     else if (!strcmp(argv[0], "coppyabode")) {
         tmp++;
-        copydir(tmp[0], tmp[1]);
+        copydir(tmp[0], tmp[1], user);
         tmp = NULL;
     }
 
     else if (!strcmp(argv[0], "dwelt")) {
-        exists(argv[1]);
+        exists(argv[1], user);
     }
 
     else if (!strcmp(argv[0], "movetodir"))
