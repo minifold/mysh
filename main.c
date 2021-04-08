@@ -215,7 +215,7 @@ void help() {
     "\n============\nCommands supported:"
     "\nmovetodir"
     "\nwhereami"
-    "\nhistory [-c]"
+    "\nhistory [-c] <number>"
     "\nclear"
     "\nbyebye"
     "\nreplay <number>"
@@ -224,6 +224,8 @@ void help() {
     "\nbackground <program> [parameters]"
     "\ndalek <PID>"
     "\ndalekall"
+    "\ndelet <file>"
+    "\nlist <directory>"
     "\nmaik <file>"
     "\nmaikdir <directory>"
     "\ncoppy <file1> <file2>"
@@ -288,7 +290,7 @@ int cwd(user_t user) {
 
 user_t cd(char ** args, user_t user) {
     char * buffer = (char *)calloc(PATH_MAX, sizeof(char));
-    DIR * dir = NULL;
+    DIR * dir;
     
     if (args[2] != NULL) {
         fprintf(stderr, "mysh: too many arguments\n");
@@ -303,23 +305,18 @@ user_t cd(char ** args, user_t user) {
     }
 
     else {
-        if (args[1][0] != '/') {
-            strcpy(buffer, user.dir);
-            strcat(buffer, "/");
-            strcat(buffer, args[1]);
-        }
+        buffer = pathcheck(args[1], user);
 
         if (!strcmp(args[1], "~")) {
             char buf[PATH_MAX] = "/home/";
-            strcat(buf, user.username);
-            strcpy(args[1], buf);
+            strcat(buffer, user.username);
+            strcpy(args[1], buffer);
         }
         
         if (!strcmp(args[1], "."))
-            strcpy(args[1], user.dir);
+            strcpy(buffer, user.dir);
 
-        if ((dir = opendir(args[1])) != NULL) {
-            realpath(args[1], buffer);
+        if ((dir = opendir(buffer)) != NULL) {
             closedir(dir);
         }
 
@@ -365,10 +362,20 @@ void prompt(user_t user)
 
 char * pathcheck(char * path, user_t user) {
     int size = MAXLETTERS;
+    char * newpath = (char *)malloc(sizeof(char) * size);
+
+    if (!strcmp(path, ".."))
+    {
+        char * buf = (char *)malloc(sizeof(char) * size);
+        strcpy(newpath, user.dir);
+        strcat(newpath, "/..");
+        realpath(newpath, buf);
+        free(newpath);
+        return buf;
+    }
     // Check if the path is absolute or needs to be rewritten as local
     // in a way that can be read by the shell.
-    if (path[0] != '/') {
-        char * newpath = (char *)malloc(sizeof(char) * size);
+    else if (path[0] != '/') {
         // Just to make sure that the size of newpath is never smaller than 
         // the directory.
         if (strlen(user.dir) > MAXLETTERS) {
@@ -380,9 +387,9 @@ char * pathcheck(char * path, user_t user) {
         strcat(newpath, "/");
         strcat(newpath, path);
         // Free up the memory of the old path variable.
-        free(path);
         return newpath;
     }
+
     return path;
 }
 
@@ -449,8 +456,8 @@ int background(char ** args, int * pidarr, user_t user)
 void list(char * path, user_t user) {
     // Wrote this because I wanted to see my directory file paths as well. 
     // Only kind of works.
-    struct dirent *dir;
-    DIR *pdir;
+    struct dirent * dir;
+    DIR * pdir;
     struct stat s;
     if (path == NULL)
         path = strdup(user.dir);
@@ -562,6 +569,12 @@ int copy(char * source, char * destination, user_t user) {
 int rm(char * file, user_t user)
 {
     FILE * fp;
+    if (file == NULL)
+    {
+        fprintf(stderr, "mysh: missing arguments\n");
+        return 0;
+    }
+
     file = pathcheck(file, user);
 
     // Check if the file exists
@@ -823,6 +836,10 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
 
     else if (!strcmp(argv[0], "dwelt")) {
         exists(argv[1], user);
+    }
+
+    else if (!strcmp(argv[0], "delet")) {
+        rm(argv[1], user);
     }
 
     else if (!strcmp(argv[0], "movetodir"))

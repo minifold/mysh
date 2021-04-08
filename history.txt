@@ -28,3 +28,21 @@ dalekall
 repeat 2 cal
 byebye
 byebye
+byebye
+movetodir ..
+byebye
+list
+ls
+movetodir ..
+byebye
+byebye
+movetodir ..
+byebye
+start ls
+movetodir mysh
+list /home/quantum
+list
+movetodir ..
+dwelt ooga
+dwelt main.c
+dwelt old
