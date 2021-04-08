@@ -135,6 +135,7 @@ char ** inithistory(FILE * fp) {
                 history = (char **)realloc(history, MAXHISTSIZE * sizeof(char *));
             } 
             history[histindex] = malloc(sizeof(buffer));
+            strcpy(history[histindex], buffer);
             memset(buffer, 0, strlen(buffer));
             histindex++;
         }
@@ -191,6 +192,11 @@ char ** addtohistory(FILE * fp, char ** history, char * args) {
         fprintf(stderr, "mysh: error opening history file.\n");
         return history;
     }
+
+    if (!strcmp(args, "\n"))
+        // There's no need to keep all of the times you press enter, so just 
+        // ignore them.
+        return history;
 
     fprintf(fp, "%s", args);
     if (histindex < MAXHISTSIZE) {
@@ -836,13 +842,6 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         rm(argv[1], user);
     }
 
-    else if (!strcmp(argv[0], "maik"))
-    {
-        tmp++;
-        make(argv, user);
-        tmp = NULL;
-    }
-
     else if (!strcmp(argv[0], "movetodir"))
         user = cd(argv, user);
 
@@ -907,7 +906,6 @@ int main() {
         free(input);
         free(argv);
         fflush(stdout);
-
     }
 
     bye(user, history, input, argv, fp);

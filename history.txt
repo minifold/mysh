@@ -1,69 +1,13 @@
-<<<<<<< HEAD
 byebye
+delet hello.txt
+delet goodbye.txt
+delet goodmorning.txt
+list
 history
 history -c
 history
-replay 2
-start ls
-dalek
-dwelt old
-dwelt main.c
 byebye
-repeat 3 history
+history
 byebye
-byebye
-repeat 3 history
-byebye
-repeat 2 history
-byebye
-start ls
-dalek 12406
-background cal
-start ls
-movetodir ~
-movetodir ..
-whereami
-help
 clear
-dalekall
-repeat 2 cal
-byebye
-byebye
-byebye
-movetodir ..
-byebye
-list
-ls
-movetodir ..
-byebye
-byebye
-movetodir ..
-byebye
-start ls
-movetodir mysh
-list /home/quantum
-list
-movetodir ..
-dwelt ooga
-dwelt main.c
-dwelt old
-byebye
-byebye
-byebye
-byebye
-byebye
-bbyebye
-byebye
-hello world
-=======
-hello world
-
-start cal
-
-start ls
-
-background date
-
-byebye
-
->>>>>>> master
+history
