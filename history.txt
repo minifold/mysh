@@ -46,3 +46,6 @@ movetodir ..
 dwelt ooga
 dwelt main.c
 dwelt old
+byebye
+byebye
+byebye

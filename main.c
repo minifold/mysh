@@ -41,7 +41,7 @@ char ** addtohistory(FILE * fp, char ** history, char * args);
 int background(char ** args, int * pidarr, user_t user);
 void builtin(char * input, char ** argv, user_t user, pid_t * pid, 
                         char ** history, int histindex, FILE * fp);
-void bye(FILE * fp);
+void bye(user_t user, char ** history, char * input, char ** argv, FILE * fp);
 user_t cd(char ** args, user_t user);
 int cwd(user_t user);
 int copy(char * source, char * destination, user_t user);
@@ -525,14 +525,6 @@ void dalekall(int * pid) {
     return;
 }
 
-void bye(FILE * fp) {
-    // I was under the impression I would have to free the user struct pointers
-    // after I was done with them, but when I did so I got an error.
-    fclose(fp);
-    clear();
-    return;
-}
-
 int copy(char * source, char * destination, user_t user) {
     
     if (source == NULL || destination == NULL) {
@@ -693,7 +685,8 @@ int copydir(char * source, char * destination, user_t user) {
 void recursivecopydir(char * source, char * destination, DIR * dir, 
                       struct dirent * entry, struct stat s, user_t user) {
 
-    char * path, *outpath;
+                    
+    char * path, *outpath = (char *)malloc(sizeof(char) * MAXLETTERS);
 
     if((dir = opendir(source))) {
         while(entry = readdir(dir)) {
@@ -706,7 +699,7 @@ void recursivecopydir(char * source, char * destination, DIR * dir,
                 if (isdir(path)) {
                     printf("%s\n", path);
                     // Create Folder on the destination path
-                    outpath = strdup(destination);
+                    strcpy(outpath, destination);
                     strcat(outpath, "/");
                     strcat(outpath, entry->d_name);
                     makedir(outpath, user);
@@ -717,13 +710,14 @@ void recursivecopydir(char * source, char * destination, DIR * dir,
                 else if (isfile(path)) {
                     // copy file. The only issue is when recursively copying, 
                     // one must make sure that the directory exists.
-                    outpath = strdup(destination);
+                    strcpy(outpath, destination);
                     strcat(outpath, "/");
                     if (!isdir(outpath))
                         makedir(outpath, user);
-                    strcat(outpath, path);
+                    strcat(outpath, entry->d_name);
                     copy(path, outpath, user);
                 }
+                free(outpath);
             }
         }
         closedir(dir);
@@ -849,6 +843,21 @@ void builtin(char * input, char ** argv, user_t user, pid_t * pid,
         fprintf(stderr, "%s is not a valid command.\n", input);      
 }
 
+void bye(user_t user, char ** history, char * input, char ** argv, FILE * fp) {
+    // Cleanup crew
+    fclose(fp);
+    free(user.dir);
+    free(user.host);
+    free(input);
+    free(argv);
+    for (int i = 0; i < histindex; i++)
+        free(history[i]);
+    free(history);
+    fflush(stdout);
+    clear();
+    return;
+}
+
 // Driver function.
 int main() {
     FILE * fp = fopen("history.txt", "a+");
@@ -878,7 +887,6 @@ int main() {
         }
 
         else if (!strcmp(argv[0], "byebye") || !strcmp(argv[0], "^C")) {
-            bye(fp);
             break;
         }
 
@@ -891,5 +899,6 @@ int main() {
 
     }
 
+    bye(user, history, input, argv, fp);
     return 0;
 }
