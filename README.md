@@ -1,4 +1,2 @@
 # mysh
-Shell Project
-
-I hate this class
+Shell Project written in C
